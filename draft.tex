@@ -1,0 +1,175 @@
+\documentclass[a4paper, 12pt]{book}
+
+\usepackage{cite}
+\usepackage{times}
+\usepackage{verbatim}
+\usepackage{color}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{indentfirst}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{courier}
+\usepackage{mfirstuc}
+\usepackage{fancyvrb}
+\usepackage{amsfonts}
+\usepackage{ifmtarg}
+\usepackage{amsmath}
+\usepackage[mathcal]{euscript}
+\usepackage{fixltx2e}
+\usepackage[notbib]{tocbibind}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,filecolor=black,urlcolor=magenta,unicode]{hyperref}
+\usepackage{rotating}
+\usepackage{hhline}
+\usepackage{wallpaper}
+
+\newcommand{\ie}{i.e.,\ }
+\newcommand{\eg}{e.g.,\ }
+\newcommand{\etc}{etc.}
+\newcommand\reffig[1]{\hyperref[#1]{Figure~\ref*{#1}}}
+\newcommand\refchap[1]{\hyperref[#1]{Chapter~\ref*{#1}}}
+\newcommand\refsec[1]{\hyperref[#1]{Section~\ref*{#1}}}
+\newcommand\refalgo[1]{\hyperref[#1]{Algorithm~\ref*{#1}}}
+\newcommand\reflst[1]{\hyperref[#1]{Listing~\ref*{#1}}}
+\newcommand\reflstline[1]{\hyperref[#1]{line~\ref*{#1}}}
+\newcommand\reftbl[1]{\hyperref[#1]{Table~\ref*{#1}}}
+\newcommand\refdef[1]{\hyperref[#1]{Definition~\ref*{#1}}}
+\newcommand\ThreadTracer{\textsc{ThreadTracer}}
+\newcommand\Lockset{\textsc{Lockset}}
+\newcommand\Djitp{\textsc{Djit$^{+}$}}
+\newcommand\Goldilocks{\textsc{Goldilocks}}
+\newcommand\FastTrack{\textsc{FastTrack}}
+\newcommand\Eraser{\textsc{Eraser}}
+\newcommand\RoadRunner{\textsc{RoadRunner}}
+\newcommand\LiteRace{\textsc{LiteRace}}
+\newcommand\Pacer{\textsc{Pacer}}
+\newcommand\hb{\includegraphics[scale=0.7]{fig/hb}}
+\newcommand\mhpr{\includegraphics[scale=0.7]{fig/mhpr}}
+\newcommand\usecourier[1]{{\usefont{T1}{courier}{m}{n} {#1}}}
+\newcommand\Tracer{\usecourier{Tracer}}
+\newcommand\JIT{\usecourier{JIT}}
+\newcommand\Rewriter{\usecourier{Rewriter}}
+\newenvironment{definition-box}%
+	{\begin{description}\addtolength{\itemsep}{-0.5\baselineskip}\addtolength{\itemindent}{3em}}%
+	{\end{description}}
+\newenvironment{center-figure}%
+	{\begin{figure}[htb]\begin{center}}%
+	{\end{center}\end{figure}}
+\newenvironment{center-table}%
+	{\begin{table}[htpb]\begin{center}}%
+	{\end{center}\end{table}}
+
+\usepackage{listings}
+\usepackage{textcomp}
+\lstset{
+	language=C++,
+	stringstyle=\rmfamily
+	commentstyle=\itshape\color[rgb]{0.133,0.545,0.133},
+	showstringspaces=false,
+	basicstyle=\ttfamily\scriptsize,
+	numberstyle=\tiny,
+	numbers=left,
+	stepnumber=1,
+	numbersep=10pt,
+	tabsize=2,
+	breaklines=true,
+	prebreak = \raisebox{0ex}[0ex][0ex]{\ensuremath{\hookleftarrow}},
+	breakatwhitespace=false,
+  	columns=fixed,
+  	upquote=true,
+  	extendedchars=true,
+%	frame=single,
+	xleftmargin=2em,
+	xrightmargin=.5em,
+	escapeinside={(*@}{@*)},
+	mathescape,
+}
+
+\usepackage{amsthm}
+\newtheorem{mydef-no-caption}{Definition}
+\newenvironment{mydef}[1][]%
+	{\begin{mydef-no-caption}{\ifnotmtarg{#1}{\textnormal{(\textbf{#1})}~}}}%
+	{\end{mydef-no-caption}}
+
+\usepackage{numprint}
+\npthousandsep{,}
+\npthousandthpartsep{}
+\npdecimalsign{.}
+
+\usepackage{tabularx}
+\usepackage{multirow}
+
+\usepackage{ntu}
+\hypersetup{
+	pdfauthor={\authorEN{}},
+	pdftitle={\titleEN{}},
+	pdfsubject={NTU Master Thesis}
+}
+
+\usepackage{setspace}
+
+\usepackage[absolute]{textpos}
+\textblockorigin{0mm}{0mm}
+
+\setcounter{tocdepth}{2}
+
+\pagestyle{plain}
+
+\begin{document}
+
+% cover page
+\maketitle
+
+% side page, used for printing on spline.
+% \makeside
+
+\frontmatter
+
+\hspace*{-6cm}
+\begin{textblock}{16}(-0.4, 0)
+	\includegraphics{fig/certification.eps}
+\end{textblock}
+\newpage
+
+\CenterWallPaper{0.25}{fig/ntu_watermark.eps}
+\begin{CJK}{UTF8}{nkai}
+\CJKhorz
+%\makecertification
+
+\onehalfspacing
+%\input{acknowledgementsCH}
+\input{abstractCH}
+\input{abstractEN}
+\tableofcontents
+\end{CJK}
+\listoffigures
+\listoftables
+
+\mainmatter
+
+\renewcommand{\arraystretch}{2.0}
+\doublespacing
+% input your thesis here
+\input{introduction}
+\input{background}
+\input{ThreadTracer}
+\input{static}
+\input{implementation}
+\input{experiments}
+\input{related}
+\input{conclusions}
+
+\backmatter
+
+\addcontentsline{toc}{chapter}{\bibname}
+\bibliographystyle{abbrv}
+
+% input your reference here
+\bibliography{thesis,other}
+
+\appendix
+%\input{appendixA}
+
+\end{document}

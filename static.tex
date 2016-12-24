@@ -1,0 +1,381 @@
+\chapter{Static Data Race Detector for OpenMP}
+\label{c:static}
+
+\newcommand\dnode[2]{\textit{#1\textsubscript{#2}}}
+\newcommand\ompdnode[1]{\dnode{#1}{omp}}
+\newcommand\ompdnodehead[1]{\ompdnode{#1}\textit{ head}}
+\newcommand\ompdnodetail[1]{\ompdnode{#1}\textit{ tail}}
+\newcommand\mhpgdnode[1]{\dnode{#1}{mhpg}}
+\newcommand\mhpgdnodehead[1]{\mhpgdnode{#1}\textit{ head}}
+\newcommand\mhpgdnodetail[1]{\mhpgdnode{#1}\textit{ tail}}
+
+Beside the dynamic approach, we also develop a static data race detector. It aims for reducing needed instrumentation in dynamic data race detector. Input program sources should be OpenMP conforming~\cite{OpenMP30Spec} and the output is a set of LLVM \verb|load| and \verb|store| instructions which need to be instrumented later by our dynamic data race detector. That is, the instructions comprise in the result set may cause data races at runtime. In other words, for those that are not included in the result set are guaranteed to be \textit{race-free}. Our static data race detector reasons the thread behaviors and predicts the relationship between two statements at runtime to find possible data races by inspecting the OpenMP constructs. It inherits from the previous work~\cite{WuJay:2009p1241} with following improvement:
+\begin{itemize}
+	\item The previous work heavily modified the GCC 4.3.1 sources making it hard to work with the newer version of GCC. Our static data race detector has been implemented as a \textit{GCC plugin} which is able to work with unmodified version of GCC 4.5 later or even the nightly build if the plugin API in GCC doesn't make any changes.
+	\item Our static data race detector supports up to OpenMP 3.0 while the previous work only supports OpenMP 2.5. OpenMP 3.0 is \textit{very different} than the previous version. It introduces the concept of \textit{task}~\cite{Ayguade:2009p1203} which significantly changes the OpenMP execution model and underlying implementation. Although the semantics of \verb|parallel| construct and other worksharing constructs remains unchanged from 2.5, each thread now is regraded as executing an \textit{implicit task} defined in the \verb|parallel| region. And a new directive, \verb|task| has been added which allows the programmer to define an \textit{explicit task}.
+	\item The previous work is \textit{intrusive}. That is, it doesn't try to maintain the correctness of the result IR for the sake of \textit{precision}. Therefore, the output executable by GCC is supposed \textit{not} to be able to execute for further dynamic analysis.
+	\item Both of the static detectors are based on \textit{may-happens-in-parallel} (\textit{MHP}) relation~\cite{Naumovich:1999p821}. However, we propose a library \usecourier{libmhpg} for analyzing \textit{MHP graph} (\textit{MHPG}) by defining \textit{high-level MHPG}. One could build a static data race detector for other multithreaded programming APIs such as PThread by first constructing a high-level MHPG. The \usecourier{libmhpg} can then take over the rest of the analysis work.
+\end{itemize}
+
+\begin{center-figure}
+	\includegraphics[scale=0.8]{fig/static_data_race_detector_architecture.eps}
+	\caption{Overview of the work flow of our static data race detector}
+	\label{fig:Static_Data_Race_Detector_Architecture}
+\end{center-figure}
+
+\reffig{fig:Static_Data_Race_Detector_Architecture} shows the evolution of the program structure (represented in tree structure) in our static data race detector. First, our static detector constructs \textit{OpenMP program structure graph} for each function in the target program. It then moves forward to the next step after all \textit{OpenMP kernel functions} are processed, constructing low-level MHPG from OpenMP program structure graph for each function and so forth. A function $\mathcal{F}$ is an OpenMP kernel function if and only if $\mathcal{F}$ is a \texttt{main} function without \texttt{skip\_omp\_tsa} attribute or $\mathcal{F}$ is a non-\texttt{main} function having \texttt{omp\_kernel} attribute. It is motivated by observing that OpenMP programs usually contain small number of functions spawning the entire computation. Only these functions need to be analyze. The attribute is annotated by the programmer however it wouldn't be a cumbersome job since the number of annotations needed is small even in large programs.
+
+\refsec{s:OpenMP-Program-Structure-Graph} to \refsec{s:Low-Level-MHPG} each defines the \textit{OpenMP program structure graph}, \textit{high-level MHPG} and \textit{low-level MHPG} appeared in \reffig{fig:Static_Data_Race_Detector_Architecture}, respectively. \refsec{s:MHP-Set} describes how to calculate \textit{MHP set} for each \textit{interested statement} from the low-level MHPG. Finally, \refsec{s:RIS-Set} elaborates on reasoning a set of statements from MHP set which are required to be instrumented in dynamic data race detector.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{OpenMP Program Structure Graph}
+\label{s:OpenMP-Program-Structure-Graph}
+
+We divide all OpenMP \textit{executable directives}~\cite{OpenMP30Spec} into two categories:
+\begin{enumerate}
+	\item \textbf{Region Directives} --- \texttt{parallel}, \texttt{task}, \texttt{for}, \texttt{sections}, \texttt{section}, \texttt{single}, \texttt{master}, \texttt{critical}, \texttt{atomic} and \texttt{ordered} directives.
+	\item \textbf{Synchronization Directives} --- \texttt{barrier}, \texttt{taskwait} and \texttt{flush} directives\footnote{These are also known as \textit{stand-alone directives} in OpenMP.}.
+\end{enumerate}
+A region directive always has an associated \textit{structured block}~\cite{OpenMP30Spec} while the synchronization directives doesn't.
+
+$\mathbb{G}_{orig} = (\mathbb{N}_{orig}, \mathbb{E}_{orig})$ is a \textit{control flow graph} (\textit{CFG}) of a conforming OpenMP program where:
+\begin{itemize}
+	\item $\forall\mathbb{R}$ in the program, $\mathbb{R}$ is a region directive, $\exists \mathbb{R}_{omp}\, head\,,\mathbb{R}_{omp}\, tail$ are \textit{OpenMP directive nodes} (\textit{dnode}):
+		\begin{enumerate}
+			\item $\mathbb{R}_{omp}\, head \in \mathbb{N}_{orig}$ and $\mathbb{R}_{omp}\, head$ is the \textit{immediate dominator} of the first basic block of its associated structured block.
+			\item $\mathbb{R}_{omp}\, tail \in \mathbb{N}_{orig}$ and $\mathbb{R}_{omp}\, tail$ is the \textit{immediate post-dominator} of the last basic block of its associated structured block.
+		\end{enumerate}
+	\item A synchronization directive is regarded as a function call statement.
+	\item Without loss of the generality, we assume there's no any \textit{critical edge} in $\mathbb{G}_{orig}$.
+\end{itemize} 
+
+Besides, our static detector is \textit{flow-insensitive}. That is, we assume that all statements in the control flow are reachable. Our detector removes all \textit{control dependencies} making a CFG flow-insensitive by \refalgo{a:flow-insensitive-pseudocode}.
+\begin{algorithm}
+	\caption{Make a CFG $\mathbb{G}$ to be flow-insensitive}\label{a:flow-insensitive-pseudocode}
+	\begin{algorithmic}[1]
+		\Procedure{MakeCFGFlowInsensitive}{$\mathbb{G}$}
+			\State \Comment{Where $\mathbb{G}$ is a CFG without critical edges and $\mathbb{G} = (\mathbb{N}, \mathbb{E})$}
+			\State Remove all \textit{back edges} in $\mathbb{G}$
+			\While{$\exists n \in \mathbb{N}: n$ has $x$ children nodes $cn_1$, $cn_2$, \dots, $cn_x$ and $x > 1$}
+				\For{$i \gets 1$ \textbf{to} $x$}
+					\State \Call{RemoveEdge}{$n$, $cn_i$}
+					\If{$i \not= x$}
+						\ForAll{$ccn \in$ child nodes of $cn_i$}
+							\State \Call{RemoveEdge}{$cn_i$, $ccn$}
+							\State \Call{AddEdge}{$cn_{x}$, $cn_i$}
+						\EndFor
+					\EndIf
+					\If{$i > 1$}
+						\State \Call{AddEdge}{$cn_{i-1}$, $cn_i$}
+					\EndIf
+				\EndFor
+				\State \Call{RemoveEdge}{$n$, $cn_x$}
+			\EndWhile
+			\State \Return $\mathbb{G}$
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\reffig{fig:flow-insensitive-example} demonstrates how \refalgo{a:flow-insensitive-pseudocode} removes the control dependencies between a node $n$ and its three children nodes $cn_1$, $cn_2$ and $cn_3$. 
+\begin{center-figure}
+	\includegraphics[scale=0.8]{fig/flow-insensitive.eps}
+	\caption{Example to remove the control dependencies for node $n$ in \refalgo{a:flow-insensitive-pseudocode}}
+	\label{fig:flow-insensitive-example}
+\end{center-figure}
+
+\refalgo{a:split-synch-directive-pseudocode} processes the synchronization directive by create a new \textit{OpenMP dnode} $\mathbb{S}_{omp}$ for a synchronization directive statement $\mathbb{S}$ and split that statements block at the point of $\mathbb{S}$.
+\begin{algorithm}
+	\caption{Split a statements block $\mathbb{N}$ at synchronization directive statement $\mathbb{S}$}
+	\label{a:split-synch-directive-pseudocode}
+	\begin{algorithmic}[1]
+		\Procedure{SplitAtSyncDirective}{$\mathbb{N}$, $\mathbb{S}$}
+			\State \Call{CreateNode}{$\mathbb{N}_1$} and copy the statements before $\mathbb{S}$ in $\mathbb{N}$ to $\mathbb{N}_1$.
+			\State \Call{CreateNode}{$\mathbb{S}_{omp}$} 
+			\State \Call{CreateNode}{$\mathbb{N}_2$} and copy the statements after $\mathbb{S}$ in $\mathbb{N}$ to $\mathbb{N}_2$.
+			\State \Call{AddEdge}{$\mathbb{N}_1$, $\mathbb{S}_{omp}$}
+			\State \Call{AddEdge}{$\mathbb{S}_{omp}$, $\mathbb{N}_2$}
+			\State \Call{AddEdges}{predecessors of $\mathbb{N}$, $\mathbb{N}_1$}
+			\State \Call{AddEdges}{$\mathbb{N}_2$, successors of $\mathbb{N}$}
+			\State \Call{RemoveNode}{$N$}
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\refalgo{a:OpenMP-program-structure-graph-pseudocode} shows the construction of the \textit{OpenMP program structure graph} $\mathbb{G}_{omp} = (\mathbb{N}_{omp}, \mathbb{E}_{omp})$ from $\mathbb{G}_{orig}$.
+\begin{algorithm}
+	\caption{Transform the original CFG into OpenMP program structure graph}
+	\label{a:OpenMP-program-structure-graph-pseudocode}
+	\begin{algorithmic}[1]
+		\State $\mathbb{G}_{omp} \gets$ \Call{\hyperref[a:flow-insensitive-pseudocode]{MakeCFGFlowInsensitive}}{$\mathbb{G}_{orig}$}
+		\ForAll{$\mathbb{N} \in \mathbb{N}_{omp}$}
+			\While{$\exists \mathbb{S}: \mathbb{S}$ is a synchronization directive}
+				\State \Call{\hyperref[a:split-synch-directive-pseudocode]{SplitAtSyncDirective}}{$\mathbb{N}$, $\mathbb{S}$}
+			\EndWhile
+		\EndFor
+		\ForAll{$\mathbb{N} \in \mathbb{N}_{omp}$}
+			\State \Call{FilterInterestedStatements}{$\mathbb{N}$}
+		\EndFor
+		\State \Call{AddImplicitBarrier}{$\mathbb{G}_{omp}$}
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{mydef}[Interested statement]
+A statement is an interested statement $\iff$ it is a function call statement or an assignment statement.
+\end{mydef}
+\textsc{FilterInterestedStatements}($\mathbb{N}$) performs filter as follows:
+\begin{itemize}
+	\item If $\mathbb{N}$ is a \ompdnode{flush} dnode, remove it from $\mathbb{G}_{omp}$.
+	\item If $\mathbb{N}$ is a \ompdnodehead{atomic} dnode, we can safely ignore it and its associated structured block since \texttt{atomic} construct in OpenMP never involved in data races. We removing following nodes from $\mathbb{G}_{omp}$
+	\begin{itemize}
+		\item $\mathbb{N}$ itself;
+		\item The corresponding \ompdnodetail{atomic} dnode;
+		\item Those nodes which is dominated by $\mathbb{N}$ and is post-dominated by its corresponding \ompdnodetail{atomic} dnode.
+	\end{itemize}
+	\item if $\mathbb{N}$ is a non-dnode, remove all non-interested statements within it.
+\end{itemize}
+
+\textsc{AddImplicitBarrier} adds \ompdnode{barrier} dnode after every \ompdnodetail{parallel}, \ompdnodetail{sections}, \ompdnodetail{for} and \ompdnodetail{single} dnodes unless a \texttt{nowait} \textit{clause} is specified in the corresponding directive of that dnode in the program.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{High-Level MHPG}
+\label{s:High-Level-MHPG}
+
+To analyze the OpenMP program structure graph in \texttt{libmhpg}, we need to convert $\mathbb{G}_{omp}$ from \refsec{s:OpenMP-Program-Structure-Graph} to $\mathbb{G}_{hl-mhpg}$. The high-level contains only three kinds of dnodes:
+\begin{itemize}
+	\item \textbf{Parallel} --- \mhpgdnodehead{parallel} and \mhpgdnodetail{parallel}.
+	\item \textbf{Single} --- \mhpgdnodehead{single} and \mhpgdnodetail{single}.
+	\item \textbf{Barrier} --- \mhpgdnode{barrier}.
+\end{itemize}
+
+Given a MHPG $\mathbb{G}_{mhpg} = (\mathbb{N}_{mhpg}, \mathbb{E}_{mhpg})$, each \mhpgdnode{parallel} dnode $\mathbb{N}_{p}$ is a \mhpgdnodehead{parallel} dnode $\mathbb{N}_{ph}$ alone with $\mathbb{N}_{ph}$'s corresponding \mhpgdnodetail{parallel} dnode $\mathbb{N}_{pt}$ where $\mathbb{N}_{ph} \in \mathbb{N}_{mhpg}$ and $\mathbb{N}_{pt} \in \mathbb{N}_{mhpg}$, is denoted by $\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$. Similarly, each \mhpgdnode{single} dnode $\mathbb{N}_{s}$ is a \mhpgdnodehead{single} dnode $\mathbb{N}_{sh}$ alone with $\mathbb{N}_{sh}$'s corresponding \mhpgdnodetail{single} dnode $\mathbb{N}_{st}$ where $\mathbb{N}_{sh} \in \mathbb{N}_{mhpg}$ and $\mathbb{N}_{st} \in \mathbb{N}_{mhpg}$, is denoted by $\mathbb{N}_{s} = (\mathbb{N}_{sh}, \mathbb{N}_{st})$.
+
+\begin{mydef}[Dominance and strictly dominance of \mhpgdnode{parallel} dnode]
+Given a \mhpgdnode{parallel} dnode $\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$, $\mathbb{N}_{p}$ (strictly) dominates a node $\mathbb{N} \iff \mathbb{N}_{ph}$ (strictly) dominates $\mathbb{N}$ and $\mathbb{N}_{pt}$ (strictly) post-dominates $\mathbb{N}$, respectively.
+\end{mydef}
+
+\begin{mydef}[Dominance and strictly dominance of \mhpgdnode{single} dnode]
+Given a \mhpgdnode{single} dnode $\mathbb{N}_{s} = (\mathbb{N}_{sh}, \mathbb{N}_{st})$, $\mathbb{N}_{s}$ (strictly) dominates a node $\mathbb{N} \iff \mathbb{N}_{sh}$ (strictly) dominates $\mathbb{N}$ and $\mathbb{N}_{st}$ (strictly) post-dominates $\mathbb{N}$, respectively.
+\end{mydef}
+
+\begin{mydef}[Innermost dominance of \mhpgdnode{parallel} dnode]
+A \mhpgdnode{parallel} dnode $\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$ innermost dominates a node $\mathbb{N} \iff \mathbb{N}_{p}$ strictly dominates $\mathbb{N}$ and $\not\exists\mathbb{N}_{sh} \in \mathbb{N}_{mhpg}$ is a \mhpgdnodehead{single} dnode such that $\mathbb{N}_{ph}$ dominates $\mathbb{N}_{sh}$.
+\end{mydef}
+
+\begin{mydef}[Innermost dominance of \mhpgdnode{single} dnode]
+A \mhpgdnode{single} dnode $\mathbb{N}_{s} = (\mathbb{N}_{sh}, \mathbb{N}_{st})$ innermost dominates a node $\mathbb{N} \iff \mathbb{N}_{s}$ strictly dominates $\mathbb{N}$ and $\not\exists\mathbb{N}_{ph} \in \mathbb{N}_{mhpg}$ is a \mhpgdnodehead{parallel} dnode such that $\mathbb{N}_{sh}$ dominates $\mathbb{N}_{ph}$.
+\end{mydef}
+
+The semantics of above MHPG dnodes is defined as follows:
+\begin{mydef}[First semantics of \mhpgdnode{parallel} dnode]
+Two statements $\mathbb{S}_1$ in statements block $\mathbb{N}_1 \in \mathbb{N}_{mhpg}$ and $\mathbb{S}_2$\footnote{It is possible that $\mathbb{S}_1 = \mathbb{S}_2$.} in statements block $\mathbb{N}_2 \in \mathbb{N}_{mhpg}$ are considered to be possibly executed by different threads concurrently at runtime if $\exists\mathbb{N}_{p}$ in $\mathbb{G}_{mhpg}$ is a \mhpgdnode{parallel} dnode where $\mathbb{N}_{p}$ innermost dominates $\mathbb{N}_1$ and $\mathbb{N}_2$.
+\end{mydef}
+
+\begin{mydef}[Second semantics of \mhpgdnode{parallel} dnode]\label{l:second-semantics-of-mhpg-parallel-node}
+Two nodes $\mathbb{N}_1 \in \mathbb{N}_{mhpg}$ and $\mathbb{N}_2 \in \mathbb{N}_{mhpg}$ are considered to be executed by different threads concurrently at runtime if $\exists\mathbb{N}_{p}$ in $\mathbb{G}_{mhpg}$ is a \mhpgdnode{parallel} dnode where $\mathbb{N}_{p}$ dominates $\mathbb{N}_1$ and $\mathbb{N}_2$ while neither of $\mathbb{N}_1$ and $\mathbb{N}_2$ dominates the other.
+\end{mydef}
+
+\begin{mydef}[Semantics of \mhpgdnode{single} dnode]
+Every statement in a node $\mathbb{N} \in \mathbb{N}_{mhpg}$ is considered to be executed by only one thread at runtime if $\exists\mathbb{N}_{s}$ in $\mathbb{G}_{mhpg}$ is a \mhpgdnode{single} dnode where $\mathbb{N}_{s}$ innermost dominates $\mathbb{N}$.
+\end{mydef}
+
+There're two key steps to transform OpenMP program structure graph into high-level MHPG:
+
+\paragraph{Task Model in OpenMP.}
+As mentioned above, OpenMP 3.0 introduces the concept of task. A task is a unit of work which can be generated explicitly via \texttt{task} construct. A task also generated implicitly when a \texttt{parallel} construct is encountered. A task instance is then \textit{put} to the \textit{task list} associated with the team of threads. At every \textit{task scheduling point}~\cite{OpenMP30Spec}, a thread may be managed to be suspend the current task or be assigned to different task if it completed a task. Therefore, a task may be executed immediately after its creation or be deferred later. A \texttt{taskwait} construct can be then used to guarantee the completion of the child tasks generated by the current task.
+
+\begin{center-figure}
+	\includegraphics[scale=0.9]{fig/task-parallelism.eps}
+	\caption{Express task parallelism in MHPG}
+	\label{fig:Task_Parallelism_in_MHPG}
+\end{center-figure}
+
+Since there's no \mhpgdnode{task} dnode in MHPG, we need to represent the \ompdnode{task} to the structure which is \textit{equivalent} to the semantics of \verb|task| constructs and only use the dnodes available in MHPG. According to the \hyperref[l:second-semantics-of-mhpg-parallel-node]{second semantics of \mhpgdnodehead{parallel} dnode}, task parallelism in MHPG can be expressed by branching the statement blocks from \mhpgdnodehead{parallel} dnode as shown in \reffig{fig:Task_Parallelism_in_MHPG}.
+
+A task $\mathcal{T}$ explicitly defined using \verb|task| construct in a given OpenMP program graph $\mathbb{G}_{omp} = (\mathbb{N}_{omp}, \mathbb{E}_{omp})$ is composed of three consecutive subgraphs of $\mathbb{G}_{omp}$:
+\begin{enumerate}
+	\item A \ompdnodehead{task} dnode $\mathcal{T}_{begin}$ (the beginning of $\mathcal{T}$).
+	\item A \ompdnodetail{task} dnode $\mathcal{T}_{end}$ (the end of $\mathcal{T}$).
+	\item A subgraph $\mathbb{G}_{\mathcal{T}_{body}} = (\mathbb{N}_{\mathcal{T}_{body}}, \mathbb{E}_{\mathcal{T}_{body}})$ in $\mathbb{G}_{omp}$ (task body of $\mathbb{T}$).
+\end{enumerate}
+
+The key to the conversion is to determine the \textit{execution scope} of $\mathcal{T}$. $\mathcal{T}$ may defer its execution indefinitely or start immediately just after its appearance. However, it must finish when encounter the first barrier after its appearance or the end of program. Therefore, the execution scope of $\mathcal{T}$ starts from $\mathcal{T}_{begin}$ and ends at first \ompdnode{taskwait} or \ompdnode{barrier} dnode post-dominated $\mathcal{T}_{end}$ or the \verb|exit| node in the $\mathbb{G}_{omp}$. By observing this fact, we  first separate $\mathcal{T}$ from $\mathbb{G}_{omp}$ by removing the edges linking to $\mathcal{T}_{begin}$ and $\mathcal{T}_{end}$ from $\mathbb{G}_{omp}$. And then add corresponding branch to reconnect $\mathcal{T}$ with $\mathbb{G}_{omp}$.
+
+\paragraph{OpenMP to MHPG Directive Node Conversion.}
+One can replace the OpenMP dnode with one of the MHPG dnodes specified in \reftbl{t:Conversion-OpenMP-to-MHPG-dnode}. OpenMP dnodes such as \ompdnode{for}, \ompdnode{task} and \ompdnode{sections} are deleted since their effectiveness depends on whether there's a \ompdnodehead{parallel} dnode dominator. Also note that \ompdnode{atomic} and \ompdnode{flush} are not in this table because they should be removed by \textsc{FilterInterestedStatements} earlier.
+\begin{center-table}
+	\label{t:Conversion-OpenMP-to-MHPG-dnode}
+	\caption{Conversion table of OpenMP directive node to MHPG directive node}
+	\begin{tabular}{|ccc|}
+		\hline
+		\textbf{OpenMP directive node} & $\rightarrow$ & \textbf{MHPG directive node} 
+		\\
+		\hline\hline
+		
+		\ompdnode{parallel} & $\rightarrow$ & \mhpgdnode{parallel}
+		\\
+		\hline\hline
+		
+		\ompdnode{single} & \multirow{5}{*}{$\rightarrow$} & \multirow{5}{*}{\mhpgdnode{single}}	\\
+		\ompdnode{section} & &	\\
+		\ompdnode{master} &	& \\
+		\ompdnode{critical} & &	\\
+		\ompdnode{ordered} & &	\\
+		\hline\hline
+		
+		\ompdnode{barrier} & \multirow{2}{*}{$\rightarrow$} & \multirow{2}{*}{\mhpgdnode{barrier}}	\\
+		\ompdnode{taskwait} & &	\\
+		\hline\hline
+		
+		\ompdnode{for} & \multirow{3}{*}{$\rightarrow$} & \multirow{3}{*}{Delete}	\\
+		\ompdnode{task} & &	\\
+		\ompdnode{sections} & &	\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Low-Level MHPG}
+\label{s:Low-Level-MHPG}
+
+The analysis and manipulation of MHPG are implemented in \texttt{libmhpg} to maximize the reusability of our static data race detector. Given a high-level MHPG $\mathbb{G}_{hl-mhpg} = (\mathbb{N}_{hl-mhpg}, \mathbb{E}_{hl-mhpg})$, \refalgo{a:low-level-mhpg-pseudocode} shows the processing on high-level MHPG to obtain the low-level MHPG for later MHP set calculation.
+\begin{algorithm}
+	\caption{Obtain the low-level MHPG from given high-level MHPG $\mathbb{G}_{hl-mhpg}$}
+	\label{a:low-level-mhpg-pseudocode}
+	\begin{algorithmic}[1]
+		\State $\mathbb{G}_{mhpg} \gets$ \Call{OptimizeMHPG}{$\mathbb{G}_{hl-mhpg}$}
+		\State $\mathbb{G}_{mhpg} \gets$ \Call{InlineFunctionCall}{$\mathbb{G}_{mhpg}$}
+		\State $\mathbb{G}_{mhpg} \gets$ \Call{OptimizeMHPG}{$\mathbb{G}_{mhpg}$}
+		\State $\mathbb{G}_{mhpg} \gets$ \Call{EliminateLocalAccess}{$\mathbb{G}_{mhpg}$}
+		\State $\mathbb{G}_{mhpg} \gets$ \Call{OptimizeMHPG}{$\mathbb{G}_{mhpg}$}
+	\end{algorithmic}
+\end{algorithm}
+
+There's a \textit{general optimization} procedure \textsc{OptimizeMHPG} which scans the whole MHPG and removes the spare nodes:
+\begin{itemize}
+	\item Any \mhpgdnode{parallel} dnode $\mathbb{N}_{p}$ which doesn't dominate any statements blocks is removed alone with its dominated MHPG dnodes. It's similar for \mhpgdnode{single} dnode.
+	\item Any \mhpgdnode{barrier} dnode immediately dominated by \mhpgdnode{parallel} or \mhpgdnode{single} dnode is removed.
+	\item If there're a \mhpgdnode{parallel} dnode $\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$ and a \mhpgdnode{single} dnode $\mathbb{N}_{s} = (\mathbb{N}_{sh}, \mathbb{N}_{st})$ such that $\mathbb{N}_{sh}$ immediately dominates $\mathbb{N}_{ph}$ and $\mathbb{N}_{st}$ is immediately dominated by $\mathbb{N}_{pt}$ shown as in \reffig{fig:MHPG_Optimization_3}, $\mathbb{N}_{sh}$ and $mathbb{N}_{st}$ are solely removed since they have no effect on MHPG.
+	\item A \mhpgdnode{parallel} dnode $\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$ will be removed if $\exists \mathbb{N}_{p}' = (\mathbb{N}_{ph}', \mathbb{N}_{pt}')$ is a \mhpgdnode{parallel} dnode where $\mathbb{N}_{p}'$ innermost dominates $\mathbb{N}_{ph}$. It's similar for \mhpgdnode{single} dnode.
+\end{itemize}
+
+\begin{center-figure}
+	\includegraphics[scale=0.9]{fig/mhpg-optimization-3.eps}
+	\caption[One of the forms of optimization inspected by \textsc{OptimizeMHPG}]{One of the forms of optimization inspected by \textsc{OptimizeMHPG}. The \mhpgdnode{single} head dnode and \mhpgdnode{single} tail dnode in the figure can be safely removed.}
+	\label{fig:MHPG_Optimization_3}
+\end{center-figure}
+
+The scan and removal are continuously performed in \textsc{OptimizeMHPG} until the last iteration doesn't make any changes on the given MHPG.
+
+\label{l:CopyStatements}
+Before any call to \textsc{InlineFunctionCall}, we performs a \textit{deep copy} procedure \textsc{CopyStatements} on statements for \textit{all MHPG} first. For all function $\mathcal{F}$ and the MHPG $\mathbb{G}_{mhpg}$ of $\mathcal{F}$, \textsc{CopyStatements} replaces the statements in $\mathbb{G}_{mhpg}$ with a copy (deep copy) of the originals referred in $\mathcal{F}$. Every copied statement maintains a \verb|ref_stmt| field recording which the statement in $\mathcal{F}$ it refers to.
+
+\label{l:InlineFunctionCall}
+For all call sites $\mathcal{C}$ in the MHPG $\mathbb{G}_\mathcal{F}$ of function $\mathcal{F}$ calling function $\mathcal{F}_\mathcal{C}$ whose MHPG is $\mathbb{G}_{\mathcal{F}_\mathcal{C}}$, \textsc{InlineFunctionCall} performs will replace $\mathcal{C}$ with the \textit{MHPG of the callee function body after inlining to the current function} which is described as follows:
+\begin{enumerate}
+	\item Replace $\mathcal{C}$ in $\mathbb{G}_\mathcal{F}$ with a copy of $\mathcal{F}_\mathcal{C}$, denoted as $\mathbb{G}_{\mathcal{F}_\mathcal{C}}'$.
+	\item Use GCC utility function to inline the function $\mathcal{F}_\mathcal{C}$ into $\mathcal{F}$, replacing the corresponding call site. For all statements $\mathcal{S}_{original}$ in $\mathcal{F}_\mathcal{C}$, inlining process to call site $\mathcal{C}$ in $\mathcal{F}$ is briefly described as follows:
+	\begin{enumerate}[label=(\roman{*})]
+		\item Make a copy of $\mathcal{S}_{original}$, $\mathcal{S}_{original}'$, from $\mathcal{F}_\mathcal{C}$.
+		\item Transform $\mathcal{S}_{original}'$ to the inlined version $\mathcal{S}_{inlined}$ for call site $\mathcal{C}$.
+		\item Place $\mathcal{S}_{inlined}$ in $\mathcal{F}$.
+	\end{enumerate}
+	 During the process of inlining, a key-value pair is inserted to a hash map $\mathcal{H}_{original \rightarrow inlined}$ where the key is a pair $(\mathcal{C}, \mathcal{S}_{original})$ and the value is $\mathcal{S}_{inlined}$.
+	\item Now, we have to replace the $\mathcal{S}_{copied}$, a copy of $\mathcal{S}_{original}$ (by \hyperref[l:CopyStatements]{\textsc{CopyStatements}} earlier), in $\mathbb{G}_{\mathcal{F}_\mathcal{C}}'$ with $\mathcal{S}_{inlined}$:
+	\begin{enumerate}[label=(\roman{*})]
+		\item Find the referred $\mathcal{S}_{original}$ from the \verb|ref_stmt| field in $\mathcal{S}_{copied}$.
+		\item Find $\mathcal{S}_{inlined}$ by looking up hash map $\mathcal{H}_{original \rightarrow inlined}$ with key $(\mathcal{C}, \mathcal{S}_{original})$.
+		\item Also create a \verb|ref_stmt| field in $\mathcal{S}_{inlined}$ to record the original statement (\ie $\mathcal{S}_{original}$) it  refers to.
+	\end{enumerate}
+\end{enumerate}
+If $\mathcal{F}$ contains statements to call another set of functions, inlining is recursively processed. Note that a function is inlined only once for a call site preventing from infinitely function inlining on a direct or indirect recursive call.
+
+However, not all functions can and will be inlined into current function:
+\begin{itemize}
+	\item Function containing invocation to \texttt{alloca}, \texttt{setjump} and/or \texttt{longjmp} is unable to be inlined into any function since inlining will cause those function calls violating their specification of runtime behaviors.
+	\item Function which is invisible in current module scope.
+	\item Function which is not an OpenMP kernel function.
+\end{itemize}
+We simply remove and ignore the call sites whose target function is one of the mentioned above.
+
+\textsc{EliminateLocalAccess} tries to remove the statements which only access the variables stored on the current function stack (\ie function local variable or parameter).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{May-Happen-in-Parallel (MHP) Set}
+\label{s:MHP-Set}
+
+\begin{mydef}[MHP Set and MHP relation]
+\label{d:MHP-Set}
+Given a MHPG $\mathbb{G}_{mhpg}$, each interested statement $\mathbb{I}$ appeared in $\mathbb{G}_{mhpg}$ has an associated MHP set $\mathcal{M}_\mathbb{I}$ containing a set of interested statements which may happen in parallel with $\mathbb{I}$. In other words, $\forall\mathbb{I}' \in \mathcal{M}_\mathbb{I}$, $\mathbb{I}$ has MHP relation with $\mathbb{I}'$, denoted by $\mathbb{I}$ \mhpr{} $\mathbb{I}'$.
+\end{mydef}
+
+As you can see from \refdef{d:MHP-Set}, MHP relation is a \textit{symmetric relation}. That is, given two interested statements $\mathbb{I}_1$ and $\mathbb{I}_2$ with their associated MHP set $\mathcal{M}_{\mathbb{I}_1}$ and $\mathcal{M}_{\mathbb{I}_2}$, $\mathbb{I}_2 \in \mathcal{M}_{\mathbb{I}_1} \implies \mathbb{I}_1 \in \mathcal{M}_{\mathbb{I}_2}$.
+
+We calculate MHP set for each interested statement from low-level MHPG since it's optimized. Given a low-level MHPG $\mathbb{G}_{ll-mhpg} = (\mathbb{N}_{ll-mhpg}, \mathbb{E}_{ll-mhpg})$, two interested statements $\mathbb{I}_1$ in $\mathbb{N}_1 \in \mathbb{N}_{ll-mhpg}$ and $\mathbb{I}_2$  in $\mathbb{N}_2 \in \mathbb{N}_{ll-mhpg}$ where $\mathbb{I}_2 \in \mathcal{M}_{\mathbb{I}_1}$, the MHP set of $\mathbb{I}_1$, if \textit{all} of the following conditions are satisfied:
+\begin{enumerate}[label=\textbf{MHP Condition \arabic{*}.}, leftmargin=*]
+	\label{MHP-Condition-1}
+	\item $\exists\mathbb{N}_{p} = (\mathbb{N}_{ph}, \mathbb{N}_{pt})$ in $\mathbb{G}_{ll-mhpg}$ is a $ \mhpgdnode{parallel}$ dnode such that:
+	\begin{itemize}
+		\item $\mathbb{N}_{p}$ innermost dominates both $\mathbb{N}_1$ and $\mathbb{N}_2$, \textit{or}
+		\item $\mathbb{N}_{p}$ dominates $\mathbb{N}_1$ and $\mathbb{N}_{pt}$ dominates $\mathbb{N}_2$.
+	\end{itemize}
+	\label{MHP-Condition-2}
+	\item $\not\exists\mathbb{B} \in \mathbb{G}_{ll-mhpg}$ is a $\mhpgdnode{barrier}$ dnode such that:
+	\begin{itemize}
+		\item $\mathbb{B}$ dominates $\mathbb{N}_1$ and $\mathbb{B}$ post-dominates $\mathbb{N}_2$, \textit{or}
+		\item $\mathbb{B}$ dominates $\mathbb{N}_2$ and $\mathbb{B}$ post-dominates $\mathbb{N}_1$.
+	\end{itemize}
+\end{enumerate}
+
+\hyperref[MHP-Condition-1]{Condition 1} ensures that statements $\mathbb{I}_1$ and $\mathbb{I}_2$ are possible to be executed by different threads concurrently while \hyperref[MHP-Condition-2]{Condition 2} ensures that there's no ordering constraint causing by $\mhpgdnode{barrier}$ dnode between $\mathbb{I}_1$ and $\mathbb{I}_2$.
+
+\begin{center-figure}
+	\includegraphics[scale=0.9]{fig/mhp-condition-2.eps}
+	\caption{\hyperref[MHP-Condition-2]{MHP Condition 2}: It's impossible that $I_1$ happens in parallel with $I_2$}
+	\label{fig:MHP_Condition_2}
+\end{center-figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Require-Instrumented-Statement (RIS) Set}
+\label{s:RIS-Set}
+
+Our static data race detector outputs a set of statements called \textit{RIS set} which are suspect involved in data races. The dynamic data race detector then prepares instrumentation codes for all statements appeared in that set for further investigation at runtime. RIS set can be extracted from MHP set. Base on the \hyperref[MHP-Condition-1]{MHP Condition 1} and \hyperref[MHP-Condition-2]{MHP Condition 2}, the MHP relation satisfies the \hyperref[Data-Race-Def-1]{Definition 1} and \hyperref[Data-Race-Def-4]{Definition 4}\footnote{Currently, lock analysis is not implemented in our static data race detector. Therefore, additional ordering constraints introduced by lock acquire and release won't be recognized.} of data race, respectively. We now prune the MHP set of each interested statement using the fact that two accesses are involve in a data race only when they access the same memory location (\ie{} \hyperref[Data-Race-Def-4]{Definition 2} of data race). This can be achieved by performing conservative alias analysis on the variables being accessed within the interested statements. The techniques we adopted for alias analysis are proposed in \cite{WuJay:2009p1241} and are summarized as follows:
+\begin{enumerate}
+	\label{Alias-Analysis-Technique-1}\item Compare the IR of the variables being accessed using utility function provided by GCC.
+	\item After observing the OpenMP implementation in GCC~\cite{Novillo:2006p1243}, we found that each structured block associated with construct $\mathbb{C}$ such as \texttt{parallel}, \texttt{single}, \texttt{task}, \etc{} in the program will be extracted and becomes a separated \textit{receiver function}. The list of variables specified in \texttt{shared} clause of $\mathbb{C}$ will be packaged into a \textit{sender object} whose type is an artificial data structure create by GCC (\ie \verb|struct .omp_data_s.|$X$ where $X$ is a serial number). The receiver function of $\mathbb{C}$ is invoked with a sender object passed when execution encounters $\mathbb{C}$. And whenever the receiver function want to access a \texttt{shared} variable $\mathbb{V}$, it obtains the address of $\mathbb{V}$ via component-referencing to the field of sender object recording $\mathbb{V}$. A mapping from certain field of sender object to its corresponding \texttt{shared} variable helps us to recover a component-reference of a sender object to the canonical \texttt{shared} variable. Comparison then becomes easy by using \hyperref[Alias-Analysis-Technique-1]{1}.
+	\item GCC occasionally creates \textit{GIMPLE temporary variable} whose value comes from an expression. Later, GCC uses either \textit{GIMPLE temporary} variable or its referred original expression in IR. To resolve this ambiguity, a mapping from GIMPLE temporary variables to their \textit{canonical expression} and an additional comparison between the canonical expressions (using \hyperref[Alias-Analysis-Technique-1]{1}) has been added to our static data race detector.
+\end{enumerate}
+
+\begin{algorithm}
+	\caption{Get canonical expression of a GIMPLE temporary variable $\mathcal{T}_{gimple}$}
+	\label{a:find-canonical-expr-pseudocode}
+	\begin{algorithmic}[1]
+		\Procedure{FindCanonicalExpr}{$\mathcal{T}_{gimple}$}
+			\State CanonicalExpr $\gets \mathcal{T}_{gimple}$
+			\Repeat
+				\State $\mathcal{D}$ $\gets$ the \textit{definition} of CanonicalExpr
+				\If{right-hand side of $\mathcal{D}$ is a function call}
+					\State \textbf{break}
+				\Else
+					\State CanonicalExpr $\gets$ right-hand side of $\mathcal{D}$
+				\EndIf
+			\Until{CanonicalExpr is not a GIMPLE temporary variable}
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+After the alias analysis, the RIS set can be constructed by \refalgo{a:RIS-set-construction}.
+\begin{algorithm}
+	\caption{RIS set construction}
+	\label{a:RIS-set-construction}
+	\begin{algorithmic}[1]
+		\State $\mathcal{R} \gets \emptyset$
+		\ForAll{interested statements $\mathbb{I}$ in the program}
+			\ForAll{interested statements $\mathbb{I'} \in \mathcal{M}_\mathbb{I}$}\Comment{$\mathcal{M}_\mathbb{I}$ is the associated MHP set of $\mathbb{I}$}
+				\State \Comment{$\mathbb{I}'$ is either a \hyperref[l:CopyStatements]{copied statement} or a \hyperref[l:InlineFunctionCall]{inlined statement}. The original statement referred to $\mathbb{I}'$ can be found through \texttt{ref\_stmt} field}
+				\State $\mathbb{I}'_{original} \gets$ the original statement referred to $\mathbb{I}'$
+				\State $\mathcal{R} \gets \mathcal{R} \cup \mathbb{I}'_{original}$
+			\EndFor
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
+A special marker is then attached to the all statements in RIS set. Later, we use DragonEgg~\cite{DragonEgg} to convert GCC IR into LLVM IR for a statements $\mathcal{S}$. If $\mathcal{S}$ is a \verb|load| or a \verb|store| instruction and does \textit{not} have a special marker, there's a \textit{metadata}\footnote{LLVM supports instruction-level metadata from 2.7 release.} attached to its corresponding LLVM IR. When \Rewriter{} in \ThreadTracer{} sees such \textit{metadata}, it stops inserting instrumentation codes for that instruction.

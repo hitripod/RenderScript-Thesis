@@ -1,0 +1,33 @@
+\chapter{Example of Graphs in Static Data Race Detector}
+\label{c:appendix_A}
+
+This appendix shows how the graph is transformed in our presented static data detector for OpenMP programs. Given an example shows in \reflst{l:omptsa-example-program}, 
+
+\begin{lstlisting}[caption={Example program},label={l:omptsa-example-program}]
+	void SFFT (int A[], int N) {
+		int i;
+		const int half = N / 2;
+		
+		if (half == 1)	// base case for recursion
+			return;
+			
+		#pragma omp parallel
+		{
+			#pragma omp single task
+			{
+				#pragma omp task
+				SFFT(A, half);
+				#pragma omp task
+				SFFT(A + half, half);
+				#pragma omp taskwait
+			}
+		}
+		
+		#pragma omp for nowait
+		for (i = 0; i < half; i++) {
+			// Just do something for A[i] and A[i + half]
+			A[i] += i;
+			A[i + half] += i + half;
+		}
+	}
+\end{lstlisting}

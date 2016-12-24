@@ -1,0 +1,119 @@
+%# -*- coding:utf-8 -*-
+% CJKmove.sty
+%
+% 移動 CJK 字符，但使用固定位置和大小（1em）的 bounding box
+% 可用於中文直行排版時字符偏移的校正
+% 此宏包對 CJK 和 xeCJK 包均有效
+%
+% 作者：milksea
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{CJKmove}[2008/08/10 ver 0.1]
+
+% frame 選項：給每個 CJK 字符加線框，幫助查看字符 bounding box 位置
+\newif\if@CJK@framed
+\@CJK@framedfalse
+\DeclareOption{frame}{\@CJK@framedtrue}
+\DeclareOption{noframe}{\@CJK@framedfalse}
+\DeclareOption*{%
+  \PackageWarning{CJKmove}{Unknown option 『\CurrentOption'}%
+}
+\ProcessOptions
+
+\ifx\XeTeXinputencoding\undefined
+  \RequirePackage{CJK}
+\else
+  \RequirePackage{xeCJK}
+\fi
+
+% \CJK@symbol：保存原來的定義
+\let\CJK@symbol\CJKsymbol
+
+% 移動的 CJK 字符
+\def\CJK@moved@symbol#1{%
+  \leavevmode
+  \vbox to 1em{%
+    \vss
+    \hbox to 1em{%
+      \raise\CJK@movey em\hbox{\kern\CJK@movex em\CJK@symbol{#1}}\hss
+    }%
+  }%
+}
+
+% 加框的 CJK 字符
+\def\CJK@framed@symbol#1{%
+  \bgroup
+    \fboxsep=0pt
+    \fbox{\CJK@symbol{#1}}%
+  \egroup
+}
+
+% 加框又移動的 CJK 字符
+\def\CJK@moveframed@symbol#1{%
+  \bgroup
+    \fboxsep=0pt
+    \fbox{\CJK@moved@symbol{#1}}%
+  \egroup
+}
+
+% 根據加框與否的選項重定義 CJK 字符
+\if@CJK@framed
+  \def\CJKmove{\let\CJKsymbol\CJK@moveframed@symbol}
+  \def\CJKnomove{\let\CJKsymbol\CJK@framed@symbol}
+\else
+  \def\CJKmove{\let\CJKsymbol\CJK@moved@symbol}
+  \def\CJKnomove{\let\CJKsymbol\CJK@symbol}
+\fi
+
+% 標點與字符定義相同
+\def\CJKpunctsymbol{\expandafter\CJKsymbol}
+
+% 設定水平向右和豎直身上的移動距離，參數為純數字，單位 em
+\def\setCJKmove#1#2{
+  \def\CJK@movex{#1}%
+  \def\CJK@movey{#2}%
+}
+% 默認移動距離：SimSun 的 vertical 模式適用
+\def\resetCJKmove{%
+  \def\CJK@movex{0}%
+  \def\CJK@movey{0.4}%
+}
+
+% 初始化
+\resetCJKmove
+\CJKnomove
+
+\endinput
+
+
+%宏包選項：
+%
+%  frame       給所有 CJK 字符加框
+%
+%  noframe     不加框
+%
+%
+%用法：
+%
+%  \CJKmove                      進入 CJK 字符移動模式
+%
+%  \CJKnomove                    進入 CJK 字符不移動模式
+%
+%  \setCJKmove <數字x> <數字y>   設置右移 x em，上移 y em
+%
+%  \resetCJKmove                 重設移動距離，默認為上移 0.4em 適於 SimSun
+%
+%
+%注意事項：
+%
+%  不同的字體可能需要設置不同的移動距離
+%
+%
+%BUG：
+%
+%  bounding box 似乎定的還是不准
+%
+%
+%TODO：
+%
+%  支持不等寬的、可規定深度和可平移的 bounding box

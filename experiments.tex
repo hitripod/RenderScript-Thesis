@@ -1,0 +1,1154 @@
+\chapter{Experiments}
+\label{c:experiments}
+
+The softwares selected in our experiments are all open-source software. A software may contains one or more executable programs. All programs are compiled to LLVM bitcodes using DragonEgg GCC plugin and LLVM toolchain as mentioned in \refchap{c:implementation} and the result bitcode is always optimized (\ie{} optimizer \verb|opt| with \verb|-O3| specified must have been performed on the result bitcode). Some of the programs contains single \verb|Makefile| and others use the GNU \verb|configure| and build system. In either case, most of the programs can be successfully compiled to bitcodes by modifying the rules in \verb|Makefile| without changing the source code. All experiments were performed on a dual CPU of Intel Xeon 2.33GHz 4-core processor machine and 2-GB of RAM running Gentoo Linux 2.6.31. Each core has only one processor (thread) and an 32-KB L1 data/instruction cache. Each pair of cores shares a 6-MB L2 on-chip cache.
+
+\reftbl{t:exp-softwares} lists the size (lines of code), and the \textit{running time} when no any instrumentation codes are inserted for each programs. The programs are executed after using \JIT{} in \ThreadTracer{} to \textit{materialize} the bitcodes into host machine codes on-the-fly. The running time referred in our experiments only measured the time went into running the \verb|main| function. Besides, all timing measurements are the average of 10 runs.
+
+\begin{center-table}
+	\label{t:exp-softwares}
+	\caption{List of the softwares examined in our experiments}
+	\renewcommand{\arraystretch}{1.0}
+	\begin{tabular}{| c | l | r | r | r | r |}
+		\hline
+		\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Software}}} &
+		\multicolumn{1}{c|}{\multirow{2}{*}{\textbf{Program}}} &
+		\multicolumn{1}{c|}{\multirow{2}{2em}{\textbf{Size} (line)}} &
+		\multicolumn{3}{c|}{\textbf{Base Time} (sec)} \\
+		\cline{4-6}
+		
+		&
+		&
+		&
+		\multicolumn{1}{c|}{\textbf{User}} &
+		\multicolumn{1}{c|}{\textbf{System}} &
+		\multicolumn{1}{c|}{\textbf{Total}}
+		\\
+		\hline\hline
+
+		OpenMPagrep & % Software
+		\texttt{agrep} & % Program
+		\numprint{352} & % Size
+		\numprint{18.31} & % User Time
+		\numprint{2.25} & % System Time
+		\numprint{20.56} % Total Time
+		\\
+		\hline\hline
+		
+		%HOMB & % Software
+		%\texttt{homb} & % Program
+		%\numprint{834} & % Size
+		%\numprint{19.82} & % User Time
+		%\numprint{0.13} & % System Time
+		%\numprint{19.95} % Total Time
+		%\\
+		%\hline\hline
+
+		%libsiftfast & % Software
+		%\texttt{siftfast} & % Program
+		%\numprint{2800} & % Size
+		%\numprint{2.94} & % User Time
+		%\numprint{0.051} & % System Time
+		%\numprint{2.99} % Total Time
+		%\\
+		%\hline\hline
+
+		\multirow{9}{*}{libgrid} & % Software
+		\texttt{wf1d} & % Program
+		\multirow{9}{*}{10661} & % Size
+		\numprint{1.72} & % User Time
+		\numprint{0.10} & % System Time
+		\numprint{1.82} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf1d\_l} & % Program
+		& % Size
+		\numprint{0.06} & % User Time
+		\numprint{0.002} & % System Time
+		\numprint{0.06} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf1d\_nl} & % Program
+		& % Size
+		\numprint{0.08} & % User Time
+		\numprint{0.006} & % System Time
+		\numprint{0.08} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d} & % Program
+		& % Size
+		\numprint{2.22} & % User Time
+		\numprint{0.004} & % System Time
+		\numprint{2.23} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d\_l} & % Program
+		& % Size
+		\numprint{7.67} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{7.70} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d\_nl} & % Program
+		& % Size
+		\numprint{0.10} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.10} % Total Time
+		\\
+		
+		& % Software
+		\texttt{wf3d} & % Program
+		& % Size
+		\numprint{30.50} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{30.53} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf3d\_l} & % Program
+		& % Size
+		\numprint{23.84} & % User Time
+		\numprint{0.01} & % System Time
+		\numprint{23.85} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf3d\_nl} & % Program
+		& % Size
+		\numprint{2.48} & % User Time
+		\numprint{0.004} & % System Time
+		\numprint{2.49} % Total Time
+		\\
+		\hline\hline
+		
+		simple-ray-tracing & % Software
+		\texttt{sray\_new\_load} & % Program
+		\numprint{10460} & % Size
+		\numprint{125.33} & % User Time
+		\numprint{0.32} & % System Time
+		\numprint{125.66} % Total Time
+		\\
+		\hline\hline
+		
+		\multirow{13}{*}{OmpSCR} & % Software
+		\texttt{fft} & % Program
+		\numprint{258} & % Size
+		\numprint{0.64} & % User Time
+		\numprint{0.04} & % System Time
+		\numprint{0.68} % Total Time
+		\\
+		
+		& % Software
+		\texttt{fft6} & % Program
+		\numprint{536} & % Size
+		\numprint{0.078} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.08} % Total Time
+		\\
+		
+		& % Software
+		\texttt{testPath} & % Program
+		\numprint{1730} & % Size
+		\numprint{0.24} & % User Time
+		\numprint{0.005} & % System Time
+		\numprint{0.25} % Total Time
+		\\
+		
+		& % Software
+		\texttt{lu} & % Program
+		\numprint{169} & % Size
+		\numprint{0.15} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.15} % Total Time
+		\\
+		
+		& % Software
+		\texttt{md} & % Program
+		\numprint{265} & % Size
+		\numprint{0.18} & % User Time
+		\numprint{0.002} & % System Time
+		\numprint{0.18} % Total Time
+		\\
+		
+		& % Software
+		\texttt{pi} & % Program
+		\numprint{83} & % Size
+		\numprint{0.058} & % User Time
+		\numprint{0} & % System Time
+		\numprint{0.058} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsort} & % Program
+		\numprint{168} & % Size
+		\numprint{0.18} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{0.21} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp1} & % Program
+		\numprint{345} & % Size
+		\numprint{19.59} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{19.61} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp2} & % Program
+		\numprint{387} & % Size
+		\numprint{19.63} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{19.65} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp4} & % Program
+		\numprint{405} & % Size
+		\numprint{19.61} & % User Time
+		\numprint{0.04} & % System Time
+		\numprint{19.65} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp5} & % Program
+		\numprint{302} & % Size
+		\numprint{19.57} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{19.59} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp6} & % Program
+		\numprint{411} & % Size
+		\numprint{19.61} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{19.64} % Total Time
+		\\
+		\hline\hline
+		
+		Glucas & % Software
+		\texttt{glucas} & % Program
+		\numprint{51986} & % Size
+		\numprint{1760.43} & % User Time
+		\numprint{0.99} & % System Time
+		\numprint{1761.42} % Total Time
+		\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+We performed experiments on 24 programs listed above. The \texttt{agrep} is the implementation of \textsc{Agrep} algorithm~\cite{Wu:1991p1269} for approximate DNA string matching. The input set to \texttt{agrep} is the \textit{human genome} with 160 DNA sequence queries. The source code of \texttt{agrep} was modified to make it working under our Linux (it's originally for Windows only). The libgrid is a library for managing 1-D, 2-D and 3-D \textit{regular grids}. The programs containing in its package are to propagate the Schr\"odinger equation~\cite{Schrodinger:1926p1292} linearly and non-linearly in a 1-D, 2-D and 3-D regular grid. The OmpSCR, abbreviated from OpenMP Source Code Repository, contains several small programs written using OpenMP directives. The \texttt{fft}, a Cooley-Tukey fast Fourier transform (FFT) algorithm~\cite{Cooley:1965p1293} implementation; the \texttt{fft6}, a Bailey's 6-step 1D FFT method implementation~\cite{Bailey:1989p1295}; the \texttt{testPath}, test whether there exists a path between given two nodes in a directed graph; the \texttt{lu}, LU decomposition of a 2-D matrix; \texttt{md}, a simple molecular dynamics simulation~\cite{Swope:1982p1298}; the \texttt{pi}, calculation of $\pi$ values; the \texttt{qsort}, C implementation of Quicksort algorithm~\cite{Hoare:1962p1297} for integer array; the \texttt{qsomp1}, \texttt{qsomp2}, \dots, and \texttt{qsomp6}, each is a variation of Quicksort algorithm implemented in C++; the \texttt{glucas}, primality test for Mersenne numbers. All the programs are \textit{compute-bound}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation of Dynamic Data Race Detector}
+\begin{center-table}
+	\label{t:exp-results-no-omptsa}
+	\caption{Experiment results (static data race detector excluded) }
+	\renewcommand{\arraystretch}{1.0}
+	\begin{tabular}{| l | r | r |  r | r | c | r | c |}
+		\hline
+		\multicolumn{1}{|c|}{\textbf{Program}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# instrumentation inserted}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# active instrumentation}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# \texttt{TTVar}s created}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# \texttt{onVarAccess} events}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{Percentage of array access}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{Slowdown} (x Base Time)\end{sideways}} &
+		\multicolumn{1}{|c|}{\begin{sideways}\textbf{\# Data races found}\end{sideways}}
+		\\
+		\hline\hline
+		
+		\texttt{agrep} & % Program
+		\numprint{48} & % # instrumentation codes
+		\numprint{2} & % # active instrumentation
+		\numprint{1} & % # TTVars created
+		\numprint{10368} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.01} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf1d} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{73} & % # active instrumentation
+		\numprint{20051} & % # TTVars created
+		\numprint{32}~M & % # onVarAccess events
+		\numprint{56.19}~\% & % Percentage of array access
+		\numprint{4.27} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf1d\_l} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{134} & % # active instrumentation
+		\numprint{1506} & % # TTVars created
+		\numprint{3227}~K & % # onVarAccess events
+		\numprint{60.58}~\% & % Percentage of array access
+		\numprint{13.4} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf1d\_nl} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{119} & % # active instrumentation
+		\numprint{12217} & % # TTVars created
+		\numprint{4408}~K & % # onVarAccess events
+		\numprint{49.24}~\% & % Percentage of array access
+		\numprint{14.32} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf2d} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{99} & % # active instrumentation
+		\numprint{65608} & % # TTVars created
+		\numprint{137}~M & % # onVarAccess events
+		\numprint{57.06}~\% & % Percentage of array access
+		\numprint{17.05} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf2d\_l} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{164} & % # active instrumentation
+		\numprint{19889} & % # TTVars created
+		\numprint{783}~M & % # onVarAccess events
+		\numprint{64.97}~\% & % Percentage of array access
+		\numprint{25.14} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf2d\_nl} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{138} & % # active instrumentation
+		\numprint{11163} & % # TTVars created
+		\numprint{6410}~K & % # onVarAccess events
+		\numprint{52.76}~\% & % Percentage of array access
+		\numprint{10.70} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+	
+		\texttt{wf3d} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{118} & % # active instrumentation
+		\numprint{1310}~K & % # TTVars created
+		\numprint{1698}~M & % # onVarAccess events
+		\numprint{98.83}~\% & % Percentage of array access
+		\numprint{68.07} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf3d\_l} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{190} & % # active instrumentation
+		\numprint{460}~K & % # TTVars created
+		\numprint{273}~M & % # onVarAccess events
+		\numprint{92.86}~\% & % Percentage of array access
+		\numprint{39.19} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{wf3d\_nl} & % Program
+		\numprint{1647} & % # instrumentation codes
+		\numprint{162} & % # active instrumentation
+		\numprint{491}~K & % # TTVars created
+		\numprint{165}~M & % # onVarAccess events
+		\numprint{97.32}~\% & % Percentage of array access
+		\numprint{69.52} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{sray\_new\_load} & % Program
+		\numprint{1} & % # instrumentation codes
+		\numprint{1} & % # active instrumentation
+		\numprint{1} & % # TTVars created
+		\numprint{7} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.16} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{fft} & % Program
+		\numprint{32} & % # instrumentation codes
+		\numprint{0} & % # active instrumentation
+		\numprint{328}~K & % # TTVars created
+		\numprint{13}~M & % # onVarAccess events
+		\numprint{29.58}~\% & % Percentage of array access
+		\numprint{119.10} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{fft6} & % Program
+		\numprint{94} & % # instrumentation codes
+		\numprint{94} & % # active instrumentation
+		\numprint{90250} & % # TTVars created
+		\numprint{1247}~K & % # onVarAccess events
+		\numprint{66.28}~\% & % Percentage of array access
+		\numprint{158.97} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{testPath} & % Program
+		\numprint{32} & % # instrumentation codes
+		\numprint{30} & % # active instrumentation
+		\numprint{25729} & % # TTVars created
+		\numprint{78615} & % # onVarAccess events
+		\numprint{22.11}~\% & % Percentage of array access
+		\numprint{14.45} & % Slowdown
+		\numprint{13} % # Data races found
+		\\
+		
+		\texttt{lu} & % Program
+		\numprint{24} & % # instrumentation codes
+		\numprint{24} & % # active instrumentation
+		\numprint{60304} & % # TTVars created
+		\numprint{29}~M & % # onVarAccess events
+		\numprint{63.33}~\% & % Percentage of array access
+		\numprint{2019.73} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{md} & % Program
+		\numprint{52} & % # instrumentation codes
+		\numprint{48} & % # active instrumentation
+		\numprint{6189} & % # TTVars created
+		\numprint{78}~M & % # onVarAccess events
+		\numprint{44.40}~\% & % Percentage of array access
+		\numprint{4374.74} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{pi} & % Program
+		\numprint{3} & % # instrumentation codes
+		\numprint{3} & % # active instrumentation
+		\numprint{3} & % # TTVars created
+		\numprint{26.4} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.34} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsort} & % Program
+		\numprint{5} & % # instrumentation codes
+		\numprint{0} & % # active instrumentation
+		\numprint{7} & % # TTVars created
+		\numprint{50} & % # onVarAccess events
+		\numprint{40}~\% & % Percentage of array access
+		\numprint{1.21} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsomp1} & % Program
+		\numprint{13} & % # instrumentation codes
+		\numprint{7} & % # active instrumentation
+		\numprint{6} & % # TTVars created
+		\numprint{7} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsomp2} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsomp4} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsomp5} & % Program
+		\numprint{10} & % # instrumentation codes
+		\numprint{0} & % # active instrumentation
+		\numprint{0} & % # TTVars created
+		\numprint{0} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{qsomp6} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % # Data races found
+		\\
+		
+		\texttt{glucas} & % Program
+		\numprint{122} & % # instrumentation codes
+		\numprint{120} & % # active instrumentation
+		\numprint{65} & % # TTVars created
+		\numprint{593}~K & % # onVarAccess events
+		\numprint{17.09}~\% & % Percentage of array access
+		\numprint{0.01} & % Slowdown
+		\numprint{1} % # Data races found
+		\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+The results of experiments performed without help from static data race detector are shown in \reftbl{t:exp-results-no-omptsa}. The first column lists the number of instrumentation codes inserted by \Rewriter{} which is equal to the number of \verb|load| and \verb|store| instructions instrumented. The second column is the number of \textit{active instrumentation} which is the actual instrumentation used at runtime. Then the number of shadow variables (\ie{} \verb|TTVar| instances) created during the execution and the times \verb|VarAccess| events triggered are listed in column 3 and 4, respectively. We also show the percentage of array access in the \verb|VarAccess| events. Large numbers are chopped off with K and M denoting a multiple of one thousand and one million, respectively. The data races detected in our experiments are all confirmed to be \textit{true} data races. And some of them are \textit{harmful data races}~\cite{Narayanasamy:2007p819} (\ie{} data races found in \texttt{testPath}). Once there's any data race detected in a program, we manually fixed it and re-run all experiments for that program.
+
+In general, our dynamic data race detector incurs overheads spanning from $1x$ to $160x$ approximately. The programs above incurred significant runtime overheads have one thing in common --- their memory access pattern are \textit{complicated} or even \textit{random}. For example, the \texttt{md} has an array access in the nested loop with depth 5 and complex array element accessing. The \texttt{fft} uses the divide and conquer strategy and \textit{recursive call} in FFT implementation which also hurts the locality. Other programs like \texttt{wf3d} and \texttt{wf3d\_l}, though they generated lots of \verb|VarAccess| events several times than \verb|lu|,  \verb|md|, \etc{} and full of the array element accesses, they have good access patterns which allocate and access the 3-D grid data structure \textit{in sequential order}. One can also reach the same conclusion by comparing \texttt{testPath} and \texttt{wf1d}. Obviously, \texttt{wf1d} generates much more \verb|VarAccess| events in a roughly $408x$ and more array access percentage in a roughly $3x$ while the slowdown incurred by \texttt{wf1d} is three times less than \texttt{testPath}. That is because \texttt{testPath} uses \textit{adjacency list} to represent the graph resulting the unstructured memory access pattern during the graph traversal (two adjacent nodes may be far away from each other in the memory). 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Evaluation of Dynamic Data Race Detector with Static Approach}
+\begin{center-table}
+	\label{t:exp-results-omptsa}
+	\caption{Experiment results (static data race detector included) }
+	\renewcommand{\arraystretch}{1.0}
+	\begin{tabular}{| l | r | r |  r | r | c | r | c |}
+		\hline
+		\multicolumn{1}{|c|}{\textbf{Program}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# instrumentation inserted}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# active instrumentation}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# \texttt{TTVar}s created}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{\# \texttt{onVarAccess} events}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{Percentage of array access}\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{Slowdown} (x Base Time)\end{sideways}} &
+		\multicolumn{1}{|c}{\begin{sideways}\textbf{Performance improvement}\end{sideways}}
+		\\
+		\hline\hline
+		
+		\texttt{agrep} & % Program
+		\numprint{48} & % # instrumentation codes
+		\numprint{2} & % # active instrumentation
+		\numprint{1} & % # TTVars created
+		\numprint{10368} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.01} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{wf1d} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{73} & % # active instrumentation
+		\numprint{20051} & % # TTVars created
+		\numprint{32}~M & % # onVarAccess events
+		\numprint{56.19}~\% & % Percentage of array access
+		\numprint{4.27} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{wf1d\_l} & % Program
+		\numprint{1487} & % # instrumentation codes
+		\numprint{125} & % # active instrumentation
+		\numprint{1417} & % # TTVars created
+		\numprint{3226}~K & % # onVarAccess events
+		\numprint{70.78}~\% & % Percentage of array access
+		\numprint{12.35} & % Slowdown
+		\numprint{1.05} % Performance improvement
+		\\
+		
+		\texttt{wf1d\_nl} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{103} & % # active instrumentation
+		\numprint{12158} & % # TTVars created
+		\numprint{4308}~K & % # onVarAccess events
+		\numprint{54.75}~\% & % Percentage of array access
+		\numprint{14.32} & % Slowdown
+		\numprint{1.3} % Performance improvement
+		\\
+		
+		\texttt{wf2d} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{77} & % # active instrumentation
+		\numprint{65321} & % # TTVars created
+		\numprint{137}~M & % # onVarAccess events
+		\numprint{58.69}~\% & % Percentage of array access
+		\numprint{15.35} & % Slowdown
+		\numprint{1.7} % Performance improvement
+		\\
+		
+		\texttt{wf2d\_l} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{135} & % # active instrumentation
+		\numprint{19729} & % # TTVars created
+		\numprint{783}~M & % # onVarAccess events
+		\numprint{69.5}~\% & % Percentage of array access
+		\numprint{23.42} & % Slowdown
+		\numprint{1.72} % Performance improvement
+		\\
+		
+		\texttt{wf2d\_nl} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{116} & % # active instrumentation
+		\numprint{11132} & % # TTVars created
+		\numprint{6410}~K & % # onVarAccess events
+		\numprint{52.76}~\% & % Percentage of array access
+		\numprint{10.70} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+	
+		\texttt{wf3d} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{118} & % # active instrumentation
+		\numprint{1310}~K & % # TTVars created
+		\numprint{1698}~M & % # onVarAccess events
+		\numprint{98.83}~\% & % Percentage of array access
+		\numprint{68.07} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{wf3d\_l} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{190} & % # active instrumentation
+		\numprint{460}~K & % # TTVars created
+		\numprint{273}~M & % # onVarAccess events
+		\numprint{92.86}~\% & % Percentage of array access
+		\numprint{39.19} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{wf3d\_nl} & % Program
+		\numprint{1423} & % # instrumentation codes
+		\numprint{162} & % # active instrumentation
+		\numprint{491}~K & % # TTVars created
+		\numprint{165}~M & % # onVarAccess events
+		\numprint{97.32}~\% & % Percentage of array access
+		\numprint{69.52} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{sray\_new\_load} & % Program
+		\numprint{1} & % # instrumentation codes
+		\numprint{1} & % # active instrumentation
+		\numprint{1} & % # TTVars created
+		\numprint{7} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.16} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{fft} & % Program
+		\numprint{27} & % # instrumentation codes
+		\numprint{27} & % # active instrumentation
+		\numprint{328}~K & % # TTVars created
+		\numprint{13}~M & % # onVarAccess events
+		\numprint{30.68}~\% & % Percentage of array access
+		\numprint{119.07} & % Slowdown
+		\numprint{0.03} % Performance improvement
+		\\
+		
+		\texttt{fft6} & % Program
+		\numprint{87} & % # instrumentation codes
+		\numprint{87} & % # active instrumentation
+		\numprint{90245} & % # TTVars created
+		\numprint{1226}~K & % # onVarAccess events
+		\numprint{69.72}~\% & % Percentage of array access
+		\numprint{157.89} & % Slowdown
+		\numprint{1.08} % Performance improvement
+		\\
+		
+		\texttt{testPath} & % Program
+		\numprint{32} & % # instrumentation codes
+		\numprint{30} & % # active instrumentation
+		\numprint{25729} & % # TTVars created
+		\numprint{78615} & % # onVarAccess events
+		\numprint{22.11}~\% & % Percentage of array access
+		\numprint{14.45} & % Slowdown
+		\numprint{13} % Performance improvement
+		\\
+		
+		\texttt{lu} & % Program
+		\numprint{20} & % # instrumentation codes
+		\numprint{20} & % # active instrumentation
+		\numprint{60256} & % # TTVars created
+		\numprint{29}~M & % # onVarAccess events
+		\numprint{67.54}~\% & % Percentage of array access
+		\numprint{2018.66} & % Slowdown
+		\numprint{1.07} % Performance improvement
+		\\
+		
+		\texttt{md} & % Program
+		\numprint{48} & % # instrumentation codes
+		\numprint{44} & % # active instrumentation
+		\numprint{6176} & % # TTVars created
+		\numprint{78}~M & % # onVarAccess events
+		\numprint{47.39}~\% & % Percentage of array access
+		\numprint{4373.28} & % Slowdown
+		\numprint{1.46} % Performance improvement
+		\\
+		
+		\texttt{pi} & % Program
+		\numprint{3} & % # instrumentation codes
+		\numprint{3} & % # active instrumentation
+		\numprint{3} & % # TTVars created
+		\numprint{26.4} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.34} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsort} & % Program
+		\numprint{5} & % # instrumentation codes
+		\numprint{5} & % # active instrumentation
+		\numprint{7} & % # TTVars created
+		\numprint{50} & % # onVarAccess events
+		\numprint{40}~\% & % Percentage of array access
+		\numprint{1.21} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsomp1} & % Program
+		\numprint{13} & % # instrumentation codes
+		\numprint{7} & % # active instrumentation
+		\numprint{6} & % # TTVars created
+		\numprint{7} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsomp2} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsomp4} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsomp5} & % Program
+		\numprint{10} & % # instrumentation codes
+		\numprint{0} & % # active instrumentation
+		\numprint{0} & % # TTVars created
+		\numprint{0} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{qsomp6} & % Program
+		\numprint{17} & % # instrumentation codes
+		\numprint{9} & % # active instrumentation
+		\numprint{8} & % # TTVars created
+		\numprint{9} & % # onVarAccess events
+		\numprint{0}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0} % Performance improvement
+		\\
+		
+		\texttt{glucas} & % Program
+		\numprint{111} & % # instrumentation codes
+		\numprint{109} & % # active instrumentation
+		\numprint{54} & % # TTVars created
+		\numprint{593}~K & % # onVarAccess events
+		\numprint{20.23}~\% & % Percentage of array access
+		\numprint{0.00} & % Slowdown
+		\numprint{0.01} % Performance improvement
+		\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+\reftbl{t:exp-results-omptsa} shows the evaluation which combine our static detector with the dynamic detector. The performance improvement column is defined by the difference between slowdown excluding (in \reftbl{t:exp-results-no-omptsa}) and including the static data race detector. Our static data race detector doesn't improve the performance significantly. The main reason is that our static data race detector makes oversimplified assumption on the array accesses in the program --- they are aliased and always induced the data races. Therefore, our static detector is unable to eliminate any array access instrumentation which is the real bottleneck of the performance. The set of the data races found in the previous experiment remains unchanged after the static data race detector is included. Later experiments use the execution time from the configuration in this experiments as the base time.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation of Real-to-Shadow Map Lookup Cache}
+\begin{center-table}
+  \label{t:exp-results-real-to-shadow-variable-cache}
+  \caption[Real-to-shadow variable map lookup cache comparison]{Comparison between real-to-shadow variable map lookup cache in \ThreadTracer{} and \RoadRunner{}}
+  \renewcommand{\arraystretch}{1.0}
+  \begin{tabular}{| l | r | r | r | r | r | c |}
+    \hline
+	&
+    &
+    \multicolumn{2}{c|}{\textbf{\ThreadTracer{}}} &
+    \multicolumn{2}{c|}{\textbf{\RoadRunner{}}} &
+	\\
+    \cline{3-6}
+    
+    \multicolumn{1}{|c|}{\textbf{Program}} &
+    \multicolumn{1}{c|}{\begin{sideways}\textbf{\# hit in thread-local cache}\end{sideways}} &
+    \multicolumn{1}{c}{\begin{sideways}\textbf{\# hit in thread-shared cache}\end{sideways}} &
+    \multicolumn{1}{|c}{\textbf{Hit Rate}} &
+    \multicolumn{1}{|c}{\begin{sideways}\textbf{\# hit in thread-shared cache}\end{sideways}} &
+    \multicolumn{1}{|c|}{\textbf{Hit Rate}} &
+	\multicolumn{1}{c|}{\begin{sideways}\textbf{Effectiveness}\end{sideways}}
+    \\
+    \hline\hline
+    
+    \texttt{agrep} & % Program
+    \numprint{10304} & % # hit in thread-local cache
+    \numprint{63} & % # hit in thread-shared cach
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{63} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.001} % Effectiveness
+    \\
+    
+    \texttt{wf1d} & % Program
+    \numprint{32}~M & % # hit in thread-local cache
+    \numprint{5373} & % # hit in thread-shared cach
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{9367} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.007} % Effectiveness
+    \\
+    
+    \texttt{wf1d\_l} & % Program
+    \numprint{3095}~K & % # hit in thread-local cache
+    \numprint{72714} & % # hit in thread-shared cach
+    \numprint{98.17}~\% & % Hit Rate
+    \numprint{131}~K & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.007} % Effectiveness
+    \\
+    
+    \texttt{wf1d\_nl} & % Program
+    \numprint{4238}~K & % # hit in thread-local cache
+    \numprint{91563} & % # hit in thread-shared cach
+    \numprint{98.22}~\% & % Hit Rate
+    \numprint{169}~K & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.011} % Effectiveness
+    \\
+    
+    \texttt{wf2d} & % Program
+    \numprint{137}~M & % # hit in thread-local cache
+    \numprint{7762} & % # hit in thread-shared cach
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{14951} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{0.997} % Effectiveness
+    \\
+    
+    \texttt{wf2d\_l} & % Program
+    \numprint{766}~M & % # hit in thread-local cache
+    \numprint{6632}~K & % # hit in thread-shared cach
+    \numprint{98.67}~\% & % Hit Rate
+    \numprint{17}~M & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{0.997} % Effectiveness
+    \\
+    
+    \texttt{wf2d\_nl} & % Program
+    \numprint{6399}~K & % # hit in thread-local cache
+    \numprint{5803} & % # hit in thread-shared cach
+    \numprint{99.93}~\% & % Hit Rate
+    \numprint{10293} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+  
+    \texttt{wf3d} & % Program
+    \numprint{1698}~M & % # hit in thread-local cache
+    \numprint{1796} & % # hit in thread-shared cach
+    \numprint{99.998}~\% & % Hit Rate
+    \numprint{22134} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.008} % Effectiveness
+    \\
+    
+    \texttt{wf3d\_l} & % Program
+    \numprint{2731}~M & % # hit in thread-local cache
+    \numprint{7499} & % # hit in thread-shared cach
+    \numprint{99.90}~\% & % Hit Rate
+    \numprint{2717}~K & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.006} % Effectiveness
+    \\
+    
+    \texttt{wf3d\_nl} & % Program
+    \numprint{165}~M & % # hit in thread-local cache
+    \numprint{1867} & % # hit in thread-shared cach
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{18278} & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{0.999} % Effectiveness
+    \\
+    
+    \texttt{sray\_new\_load} & % Program
+    \numprint{0} & % # hit in thread-local cache
+    \numprint{5.4} & % # hit in thread-shared cach
+    \numprint{77.14}~\% & % Hit Rate
+    \numprint{6} & % # hit in thread-shared cache
+    \numprint{85.71}~\% & % Hit Rate
+    \numprint{1.002} % Effectiveness
+    \\
+    
+    \texttt{fft} & % Program
+    \numprint{7634}~K & % # hit in thread-local cache
+    \numprint{1592}~K & % # hit in thread-shared cach
+    \numprint{66.10}~\% & % Hit Rate
+    \numprint{4699}~K & % # hit in thread-shared cache
+    \numprint{88.36}~\% & % Hit Rate
+    \numprint{1.164} % Effectiveness
+    \\
+    
+    \texttt{fft6} & % Program
+    \numprint{1205}~K & % # hit in thread-local cache
+    \numprint{338.6} & % # hit in thread-shared cach
+    \numprint{96.69}~\% & % Hit Rate
+    \numprint{337} & % # hit in thread-shared cache
+    \numprint{84.60}~\% & % Hit Rate
+    \numprint{1.011} % Effectiveness
+    \\
+    
+    \texttt{testPath} & % Program
+    \numprint{63695} & % # hit in thread-local cache
+    \numprint{38291} & % # hit in thread-shared cach
+    \numprint{77.96}~\% & % Hit Rate
+    \numprint{49710} & % # hit in thread-shared cache
+    \numprint{77.98}~\% & % Hit Rate
+    \numprint{1.010} % Effectiveness
+    \\
+    
+    \texttt{lu} & % Program
+    \numprint{10}~M & % # hit in thread-local cache
+    \numprint{16}~M & % # hit in thread-shared cach
+    \numprint{91.33}~\% & % Hit Rate
+    \numprint{18}~M & % # hit in thread-shared cache
+    \numprint{99.88}~\% & % Hit Rate
+    \numprint{0.977} % Effectiveness
+    \\
+    
+    \texttt{md} & % Program
+    \numprint{75}~M & % # hit in thread-local cache
+    \numprint{113}~K & % # hit in thread-shared cach
+    \numprint{96.25}~\% & % Hit Rate
+    \numprint{1847}~K & % # hit in thread-shared cache
+    \numprint{98.47}~\% & % Hit Rate
+    \numprint{0.990} % Effectiveness
+    \\
+    
+    \texttt{pi} & % Program
+    \numprint{0} & % # hit in thread-local cache
+    \numprint{21} & % # hit in thread-shared cach
+    \numprint{79.55}~\% & % Hit Rate
+    \numprint{21} & % # hit in thread-shared cache
+    \numprint{79.55}~\% & % Hit Rate
+    \numprint{1.001} % Effectiveness
+    \\
+    
+    \texttt{qsort} & % Program
+    \numprint{45} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{90.00}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{90.00}~\% & % Hit Rate
+    \numprint{1.002} % Effectiveness
+    \\
+    
+    \texttt{qsomp1} & % Program
+    \numprint{1} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{14.29}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{14.29}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+    
+    \texttt{qsomp2} & % Program
+    \numprint{1} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+    
+    \texttt{qsomp4} & % Program
+    \numprint{1} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+    
+    \texttt{qsomp5} & % Program
+    \numprint{0} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{0}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{0}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+    
+    \texttt{qsomp6} & % Program
+    \numprint{1} & % # hit in thread-local cache
+    \numprint{0} & % # hit in thread-shared cach
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{0} & % # hit in thread-shared cache
+    \numprint{11.11}~\% & % Hit Rate
+    \numprint{1.000} % Effectiveness
+    \\
+    
+    \texttt{glucas} & % Program
+    \numprint{61615} & % # hit in thread-local cache
+    \numprint{531}~K & % # hit in thread-shared cach
+    \numprint{99.89}~\% & % Hit Rate
+    \numprint{523}~K & % # hit in thread-shared cache
+    \numprint{99.99}~\% & % Hit Rate
+    \numprint{1.005} % Effectiveness
+    \\
+    \hline\hline
+
+	\multicolumn{1}{|c|}{\textbf{Average}} & % program
+    & % # hit in thread-local cache
+    & % # hit in thread-shared cach
+    & % Hit Rate
+    & % # hit in thread-shared cache
+    & % Hit Rate
+    \numprint{1.008} % Effectiveness
+	\\
+	\hline
+  \end{tabular}
+\end{center-table}
+
+\begin{mydef}[Effectiveness of \ThreadTracer{} real-to-shadow variable cache]\label{l:effectiveness-ThreadTracer-real-to-shadow-cache}
+Let $A$ be the execution time under the use of \ThreadTracer{} real-to-shadow variable cache design and $B$ be the execution time under other approach. The effectiveness of \ThreadTracer{} real-to-shadow variable cache $E_{TT} = B / A$.
+\end{mydef}
+
+\reftbl{t:exp-results-real-to-shadow-variable-cache} compares the \textit{effectiveness} of the real-to-shadow variable cache design used in \ThreadTracer{} and \RoadRunner{}. This six-column table consists of two experiments. In the first experiments, we modify \ThreadTracer{} such that it \textit{always} does two lookup procedures, one using the real-to-shadow lookup cache built-in in \ThreadTracer{} and the other using the one described in \RoadRunner{}~\cite{Flanagan:2010p71}. Column 1 to 5 show the results of the first experiment. Because \ThreadTracer{} and \RoadRunner{} both adopt same design on first level cache, the first column is shared between two approaches. The second experiment runs two version of \ThreadTracer{} each implements one of the cache designs. The effectiveness then is measured from the execution time of these two programs by \refdef{l:effectiveness-ThreadTracer-real-to-shadow-cache}.
+
+As you can see from the results of the evaluation, the real-to-shadow variable map lookup cache used in \RoadRunner{} generally has high hit rate that the one used in \ThreadTracer{}. However, the later is still competitive since it can lookup the cache more efficient than the former resulting less execution time.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation of Sampling}
+
+\begin{center-table}
+	\label{t:exp-results-sampling}
+	\caption{Experiment results of sampling-based data race detector}
+	\renewcommand{\arraystretch}{1.0}
+	\begin{tabular}{| l | c | c |}
+		\hline
+		\multicolumn{1}{|c|}{\textbf{Program}} &
+		\multicolumn{1}{c|}{\begin{sideways}\textbf{Slowdown} (x Base Time)\end{sideways}}
+		\\
+		\hline\hline
+		
+		\texttt{agrep} & % Program
+		\numprint{0.01} % Slowdown
+		\\
+		
+		\texttt{wf1d} & % Program
+		\numprint{1.35} % Slowdown
+		\\
+		
+		\texttt{wf1d\_l} & % Program
+		\numprint{8.87} % Slowdown
+		\\
+		
+		\texttt{wf1d\_nl} & % Program
+		\numprint{6.32} % Slowdown
+		\\
+		
+		\texttt{wf2d} & % Program
+		\numprint{8.60} % Slowdown
+		\\
+		
+		\texttt{wf2d\_l} & % Program
+		\numprint{9.03} % Slowdown
+		\\
+		
+		\texttt{wf2d\_nl} & % Program
+		\numprint{7.66} % Slowdown
+		\\
+	
+		\texttt{wf3d} & % Program
+		\numprint{11.12} % Slowdown
+		\\
+		
+		\texttt{wf3d\_l} & % Program
+		\numprint{8.98} % Slowdown
+		\\
+		
+		\texttt{wf3d\_nl} & % Program
+		\numprint{12.23} % Slowdown
+		\\
+		
+		\texttt{sray\_new\_load} & % Program
+		\numprint{0.13} % Slowdown
+		\\
+		
+		\texttt{fft} & % Program
+		\numprint{9.27} % Slowdown
+		\\
+		
+		\texttt{fft6} & % Program
+		\numprint{19.68} % Slowdown
+		\\
+		
+		\texttt{testPath} & % Program
+		\numprint{7.88} % Slowdown
+		\\
+		
+		\texttt{lu} & % Program
+		\numprint{126.23} % Slowdown
+		\\
+		
+		\texttt{md} & % Program
+		\numprint{212.70} % Slowdown
+		\\
+		
+		\texttt{pi} & % Program
+		\numprint{0.34} % Slowdown
+		\\
+		
+		\texttt{qsort} & % Program
+		\numprint{1.10} % Slowdown
+		\\
+		
+		\texttt{qsomp1} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		
+		\texttt{qsomp2} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		
+		\texttt{qsomp4} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		
+		\texttt{qsomp5} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		
+		\texttt{qsomp6} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		
+		\texttt{glucas} & % Program
+		\numprint{0.00} % Slowdown
+		\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+Sampling technique adopt in \ThreadTracer{} significantly reduces the runtime overheads from generally $1x$ to $160x$ to $1x$ to $20x$. Since our sampler only samples the code region at granularity of function, a program with no any function calls during the instrumented region won't benefit from our sampling. Programs incurred high runtime overheads such as \verb|lu| and \verb|md| still have scary slowdown but improve a lot.

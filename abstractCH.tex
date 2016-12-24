@@ -1,0 +1,10 @@
+\begin{abstractCH}
+
+\setlength{\baselineskip}{1.5em}
+為了追求 (1) 效能; (2) 可移植性; (3) 使用性，Google 在 Android 3.0 的版本中推出了 RenderScript。我們延伸其功能，使之可遠端化。具體一點的說法，我們透過網路接口傳送 RenderScript 命令到遠端圖形引擎上。請注意，在此所提到的遠端引擎可以是在同一裝置或是遠端裝置之上。
+
+我們的貢獻分為兩個部分：\\
+        \\首先，我們讓 RenderScript 現有的先進先出佇列可以連網。我們建構了一個轉運層以實現網路功能抽象化。\\
+        \\第二，透過把指令傳送到遠端引擎之上，我們可以重新在該引擎上執行所接收而來的命令。視不同型態的遠端引擎而定，重新執行命令的動作可能會需要把 RenderScript 的命令對應到 egl、glx、agl、或是 wgl。其分別對應於不同的平台，依序為 Android, Linux, Mac OS, Windows。在本論文中，我們將敘述對應到 egl 的實作細節。
+
+\end{abstractCH}

@@ -1,0 +1,152 @@
+\chapter{Background of Dynamic Data Race Detection Algorithm}
+\label{c:background}
+
+% Use happens-before instead of lockset
+Data race detection especially \textit{precise} (no false positives) data race detection is useful. Static techniques for detecting data race needs to be conservative thus often contains bunch of false alarms in their result set. Dynamic techniques based on \Lockset{} algorithm verify whether the program execution conforming to the \textit{lock discipline}. For example, \Eraser{}~\cite{Savage:1997p280} reports there's a race if a shared variable accessed in the program execution isn't protected by some locks. \Lockset{} algorithm based detectors provide better coverage while lose the precision since they don't take care of the \textit{synchronization events} other than the lock. Detectors based on \textit{happens-before} relation~\cite{Lamport:1978p527} however, are usually precise. They combine the program order and synchronization events to reason the `happens-before' relation between access operations. If the reasoning fails, that is, these two operations cannot be ordered by the happens-before relation, there's a possibility that they may be executed concurrently. Since the precise dynamic data race detection is important as we mentioned before, we choose happens-before based algorithm for our data race detector.
+
+The following sections describes the happens-before relation and its implementation using vector clock. Two algorithms \Djitp{} and \FastTrack{} are then introduced in \refsec{s:DJIT+} and \refsec{s:FastTrack} based on vector clocks, respectively.
+
+\section{Happens-Before Relation}
+An operation $A$ at thread $t_A$ \textit{happens-before} $B$ at thread $t_B$ denoted as $A$\hb{}$B$ holds if one of the followings is true:
+\begin{itemize}
+	\item \textbf{Program Order} --- $t_A = t_B$ and $A$ precedes $B$ in the program source code.
+	\item \textbf{Synchronization Events}
+	\begin{itemize}
+		\item \textbf{Lock} --- $B$ is a lock \textit{acquire} operation on lock object $L$ after the lock \textit{release} operation $A$ on $L$.
+		\item \textbf{Fork} --- $A$ is a \textit{fork} operation that forks a new thread $t_B$.
+		\item \textbf{Join} --- $A$ is a \textit{join} operation that blocks $t_A$ until thread $t_B$ terminates.
+	\end{itemize}
+	\item \textbf{Transitive} --- $\exists C$ at $t_C$ such that $A$\hb{}$C$ and $C$\hb{}$B$.
+\end{itemize}
+
+If there're two operations $A$ and $B$ such that neither $A$\hb{}$B$ nor $B$\hb{}$A$ holds, then it's possible that $A$ and $B$ are concurrent operations. If $A$ and $B$ perform operation on the same memory location (\eg{} on the same shared variable) and one of them is write, the program is said to contain data race.
+
+\section{Vector Clocks}
+\label{s:DJIT+}
+Vector clock~\cite{Mattern:1988p817} is one of the algorithms for reasoning the happens-before relation between the events. Before the review of the vector clock-based data race detection algorithms, we define two operators for vector clock. A vector clock $VC$ is an array in which each element $VC(t)$ records the clock values of thread $t$ and:
+\begin{definition-box}
+	\item $VC_1 \ll VC_2 \iff \forall t, VC_1(t) \le VC_2(t)$
+	\item $VC_3 \gets VC_1\,\sqcup\,VC_2: \forall t, VC_3(t) \gets max(VC_1(t), VC_2(t))$
+\end{definition-box}
+
+Each thread then keeps a vector $C_t$ such that for any thread $u$, $C_t(u)$ records the clock for the last operation of thread $u$ that happens before the current operation of thread $t$. Each lock object $m$ also keeps a vector clock $L_m$ for the purpose of the synchronization the clock vector between thread $t$ and $u$ when $u$ acquires the lock $m$ after the $t$ releases it. Each shared variable $v$ keeps two vector clocks $W_v$ and $R_v$. $W_v(t)$ and $R_v(t)$ records the clocks of the last write and read to $v$ by $t$, respectively.
+
+The \Djitp{}~\cite{Pozniansky:2003p263}, a vector clock-based data race detection is then summarized as follows:
+\begin{algorithm}
+	\caption{\Djitp{} algorithm}
+	\begin{algorithmic}[1]
+		\Procedure{Fork}{$t,u$}\Comment{When thread $t$ forks a new thread $u$}
+			\State $C_u \gets C_u\,\sqcup\,C_t$
+			\State $C_t \gets C_t + 1$
+		\EndProcedure
+		\Statex
+		\Procedure{Join}{$t,u$}\Comment{When thread $t$ blocks until the termination of thread $u$}
+			\State $C_t \gets C_t\,\sqcup\,C_u$
+			\State $C_u \gets C_u + 1$
+		\EndProcedure
+		\Statex
+		\Procedure{Acquire}{$m,t$}\Comment{When thread $t$ acquires the lock $m$}
+			\State $C_t \gets C_t\,\sqcup\,L_m$
+		\EndProcedure
+		\Statex
+		\Procedure{Release}{$m,t$}\Comment{When thread $t$ release the lock $m$}
+			\State $L_m \gets C_t$
+			\State $C_t \gets C_t + 1$
+		\EndProcedure
+		\Statex
+		\Procedure{Read}{$v,t$}\Comment{When thread $t$ reads shared variable $v$}
+			\If{\textbf{not} $W_v \ll C_t$}
+				\State \Call{Error}{``write-after-read race''}
+			\EndIf
+			\State $R_v(t) \gets C_t(t)$
+		\EndProcedure
+		\Statex
+		\Procedure{Write}{$v,t$}\Comment{When thread $t$ writes shared variable $v$}
+			\If{\textbf{not} $W_v \ll C_t$}
+				\State \Call{Error}{``write-after-write race''}
+			\EndIf
+			\If{\textbf{not} $R_v \ll C_t$}
+				\State \Call{Error}{``read-after-write race''}
+			\EndIf
+			\State $W_v(t) \gets C_t(t)$
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\Djitp{} algorithm is \textit{sound} and \textit{precise}. However, it's an $O(n)$ time and space algorithm (where $n$ is proportional to the number of threads in the system). It performs $O(n)$ time operations upon the synchronization event (\eg{} lock acquire and release) and variable access.
+
+\section{\FastTrack{} Algorithm}
+\label{s:FastTrack}
+\FastTrack~\cite{Flanagan:2009p3} subsequently improves the \Djitp{} from generally $O(n)$ to $O(1)$ time and space \textit{in most time}. It's still \textit{sound} and as \textit{precise} as \Djitp{}. This is achieved by the observation that there's no need to \textit{always} record entire vector clocks $W_v$ and $R_v$ for each variable $v$. Assume we guarantee to report the first data race on $v$. When a variable $v$ is accessed and program remains race-free in the meantime, all previous \textit{writes} should be \textit{totally ordered}\footnote{Because $W_v \ll C_u$ holds for any thread $u$ that accessed $v$.}. Therefore, only the \textit{latest clock} of the write on $v$ need to be checked. $W_v$ then reduces to an \textit{epoch} and the check performed on $W_v$ becomes $O(1)$ time. An epoch $c@t$ is \textit{a scalar} which records only thread $t$ and its clock value $v$.
+
+Unlike $W_v$, $R_v$ cannot simply becomes an epoch since reads are not guaranteed to be totally-ordered even in a race-free program. That is, a write to $v$ may cause race with the any previous reads to $v$ not just the last one. However, time and space complexity still can be reduced by using the epoch instead of the keeping complete vector clocks for $R_v$ as possible as we can. \reffig{fig:FastTrack_read} shows how the representation of $R_v$ being changed. The \textit{empty state} is the initial state of the $R_v$. It's usually an epoch containing the minimum clock values. The state always returns to the empty state after the write to $v$. This is because if the write access doesn't cause data race with previous reads, these previous reads should also \textit{not} cause data races with writes afterward. We can then stop tracking $R_v$ and safely discard past read history by resetting the state to empty state. After the first read by thread $t$ in empty state, the state transits to the \textit{epoch state}. In this state, $R_v$ is represented by an epoch $c@t$ and all subsequent reads by the same thread $t$ only cause an update on $c$. Once there's another thread $t'$ with clock value $c'$ where $t' \not= t$, the state becomes \textit{vector clock} state. $R_v$ becomes a vector clock where $R_v(t) = c$ and $R_v(t') = c'$. Any later read to $v$ by thread $t''$ with clock value $c''$ will update $R_v(t'')$ to $c''$.
+
+\begin{center-figure}
+\includegraphics[scale=0.9]{fig/FastTrack_read.eps}
+\caption{State transition of the representation of $R_v$}
+\label{fig:FastTrack_read}
+\end{center-figure}
+
+We define some operators between vector clock $VC$ and an epoch $E = c@t$:
+\begin{definition-box}
+	\item $E \ll VC \iff E.c < VC(E.t)$
+	\item $E =_t VC \iff E.t = t$ and $E.c = VC(t)$
+	\item $VC \gets E: VC(E.t) \gets E.c$
+	\item $E \gets_t VC: E.t \gets t$ and $E.c \gets VC(t)$
+\end{definition-box}
+
+\refalgo{a:FastTrack_pseudocode} shows the pseudo code of \FastTrack{} algorithm. We implement \FastTrack{} on the top of \ThreadTracer{} depicted in the following chapter and use it as default approach to dynamically detect the data races in our detector.
+
+\begin{algorithm}
+	\caption{\FastTrack{} algorithm}
+	\label{a:FastTrack_pseudocode}
+	\begin{algorithmic}[1]
+		\State \textbf{Initial:} 
+		\State \hspace{1.5em} $W_v \gets$ \textit{an epoch contains minimum clock value}
+		\State \hspace{1.5em} $State(R_v) \gets$ \textit{initial state}
+		\Statex
+		\Procedure{Read}{$v,t$}
+			\If{$State(R_v) =$ \textit{epoch state} \textbf{and} $R_v =_t C_t$}
+				\State \Return\Comment{No action needed for same epoch}
+			\EndIf
+			\If{\textbf{not} $W_v \ll C_t$}
+				\State \Call{Error}{``write-after-read race''}
+			\EndIf
+			\If{$State(R_v) =$ \textit{initial state}}
+				\State $State(R_v) \gets$ \textit{epoch state}
+				\State $R_v \gets_t C_t$
+			\ElsIf{$State(R_v) =$ \textit{epoch state}}
+				\If{$R_v.t = t$}
+					\State $R_v.c \gets C_t(t)$
+				\Else
+					\State $oldR_v \gets R_v$
+					\State $State(R_v) \gets$ \textit{vector clock state}\Comment{$R_v$ becomes a vector clock}
+					\State $R_v \gets oldR_v$
+					\State $R_v(t) \gets C_t(t)$
+				\EndIf
+			\Else\Comment{$State(R_v) =$ \textit{vector clock state}}
+				\State $R_v(t) \gets C_t(t)$
+			\EndIf
+		\EndProcedure
+		\Statex
+		\Procedure{Write}{$v,t$}
+			\If{$W_v =_t C_t$}
+				\State \Return\Comment{No action needed for same epoch}
+			\EndIf
+			\If{\textbf{not} $W_v \ll C_t$}
+				\State \Call{Error}{``write-after-write race''}
+			\EndIf
+			\If{$State(R_v) =$ \textit{epoch state}}
+				\If{\textbf{not} $R_v \ll C_t$}\Comment{$R_v$ here is an epoch}
+					\State \Call{Error}{``read-after-write race''}
+				\EndIf
+			\ElsIf{$State(R_v) =$ \textit{vector clock state}}
+				\If{\textbf{not} $R_v \ll C_t$}\Comment{$R_v$ here is a vector clock}
+					\State \Call{Error}{``read-after-write race''}
+				\EndIf
+			\EndIf
+			\State $W_v \gets_t C_t$
+			\State $State(R_v) \gets$ \textit{initial state}\Comment{Clear read history}
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}

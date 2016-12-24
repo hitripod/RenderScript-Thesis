@@ -1,0 +1,22 @@
+\begin{abstractEN}
+
+Google introduces RenderScript as part of Android 3.0 for the following reasons: (1) Performance;  (2) Portability; and (3) Usability. We extend it to make it remote-able. Specifically, we send RenderScript commands through a socket to a remote graphics engine. We use the term, remote engine, to refer to the engine on the same device or on a remote host. 
+
+Our contribution is two-fold. First, we make the existing FIFO queues in RenderScript network-ready. We build the transport layer to facilitate the networking abstraction. Second, we replay the commands on the remote engine by materializing the commands on top of a remote engine. Depending on the type of remote engines, the replay may need to map RenderScript commands to egl, glx, agl, or wgl. They are for Android, Linux, Mac OS, or Windows, respectively. We demonstrate the egl-mapped implementation in this thesis.
+
+\end{abstractEN}
+
+\begin{comment}
+
+\category{D2.4}{Software}{Software Engineering --
+Software/Program Verification} 
+\category{D2.5}{Software}{Software Engineering -- 
+Testing and Debugging}
+\category{F3.1}{Theory of Computation}{Logics and Meanings of Programs -- 
+Specifying and Verifying and Reasoning about Programs.}
+
+\terms{Algorithms, Design, Verification.}
+
+\keywords{OpenMP, GCC, LLVM, data race, multithread, dynamic analysis, static analysis.}
+
+\end{comment}

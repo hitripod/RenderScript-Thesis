@@ -1,0 +1,476 @@
+\chapter{Design and Implementation of \RS{} System }
+\label{c:Overview}
+\section{Stupid Naming}
+\label{s:Stupid}
+\subsection{Real-to-Shadow Variable Map Lookup Cache}
+\label{ss:real-to-shadow-lookup}
+
+We implement \FastTrack{} as a plugin (a \Tracer{}) to \ThreadTracer{}. \ThreadTracer{} is written in C++ and is a framework for dynamic analysis of multithreaded softwares. It's motivated by the work of \RoadRunner{}~\cite{Flanagan:2010p71} and shares some basic designs with it. We'll compare it with our work in the \hyperref[s:ThreadTracer-Comparison]{later section}. It adopts \textit{event model}, that is, the instrumentation codes inserted at load time generates a \textit{stream of events} at runtime. Each generated event will finally be routed to and be processed by the corresponded event handler defined in \Tracer{}s. Several kinds of events are supported, including:
+\begin{itemize}
+	\item \textbf{androidrenderscriptRenderScript\.cpp} (It’s auto-generated):
+		\begin{center}
+			\verb{"rsnScriptCCreate", "(ILjava/lang/String;)I", (void*)nScriptCCreate }\\
+			Java’s native method	Native method but has JNI
+			\textless\textit{target program}\textgreater
+		\end{center}			
+	\item BTW, in the same file we have:
+		\begin{lstlisting}
+		static jint nScriptCCreate(JNIEnv *_env, jobject _this,
+		{
+			RsContext con, jstring resName)
+			LOG_API("nScriptCCreate, con(%p)", con); const char* resNameUTF = _env->GetStringUTFChars(resName, NULL); return (jint)rsScriptCCreate(con, resNameUTF); 
+			// Note: rsScriptCCreate is created based on f/b/l/r/rs.spec.
+			// It will just call rsi_ScriptCCreate
+		}
+		\end{lstlisting}
+	\item RenderScript.java:
+		\begin{lstlisting}[caption={\texttt{Event} and \texttt{Tracer} class}]
+		native int rsnScriptCCreate(int con, String val); 
+		synchronized int /*Better name: NScriptCCreate*/ nScriptCCreate(String { 			
+			// Terrible naming. This "nScriptCCreate" is different from
+			// the (void*)nScriptCCreate above. This "nScriptCCreate" is invoked // ScriptC.java
+			return rsnScriptCCreate(mContext, val);
+		}
+		\end{lstlisting}
+\end{itemize} 
+
+\section{Architecture of Native Engine, Java Client, and the Bridge in between}
+\label{s:Architecture}
+\begin{itemize}
+	\item Native Engine
+	\begin{itemize}
+		\item Core engine: libRS.so (Details: C++: frameworks/base/libs/rs)
+		\item JIT: libbcc.so
+	\end{itemize}
+	\item Java Client
+	\begin{itemize}
+		\item Java SDK side: android.renderscript.* (Details: Java: frameworks/base/graphics/java)
+	\end{itemize}
+	\item Bridge
+	\begin{itemize}
+		\item The JNI bridge between client side and core side: librs\_jni.so (Details:  \textbf{frameworks/base/graphics/jni/androidrenderscriptRenderScript\.cpp})
+	\end{itemize} 
+	
+\end{itemize}
+
+\begin{center-figure}
+	\includegraphics[scale=0.75]{fig/ThreadTracer_architecture.eps}
+	\caption{Main components within \ThreadTracer{}}
+	\label{fig:ThreadTracer_architecture}
+\end{center-figure}
+
+\reffig{fig:ThreadTracer_architecture} gives an overview on the architecture of \ThreadTracer{}. We start from introducing the main components: \Rewriter{}, \JIT{} and \Tracer{}.
+
+\paragraph{Rewriter.}
+The input to \ThreadTracer{} is \textit{LLVM bitcode}. Bitcode is one of representation forms of the \textit{LLVM assembly} (\ie{} \textit{LLVM intermediate representation} or \textit{LLVM IR}.) We choose bitcode as our input based on three reasons:
+\begin{enumerate}
+	\item \textbf{LLVM IR is easy to use} --- Unlike other compilers (\eg GCC), there's only one intermediate representation used in LLVM. There's not only an easy-to-use builder for the IR construction, insertion and deletion  but also a large amount of optimization passes, especially analysis passes (such as loop-restructuring, liveness analysis, alias analysis, \etc) operate at module-level or function-level or even \textit{loop-level} enabling advance IR transformation.
+	\item \textbf{LLVM IR is highly human-readable} --- Human-readable IR also facilitates debugging. One might need to inspect the LLVM IR to infer which variable contains data races (Our error reporting is \textit{statement level} which only tells you the line number of the statement in the source code containing data races). Also it helps implement a new feature or a \Rewriter{} for new multithreaded programming APIs, both of which requires modification to the module IR.
+	\item \textbf{LLVM IR was born to be serializable into on-disk file (bitcode)} --- Serializability can provide \textit{diversity} of program output as shown in \reffig{fig:LLVM_IR_diversity}. After compiling the program source to the bitcode, you can optionally feed it into \ThreadTracer{} to get the instrumented version. Any bitcode can be executed on-the-fly by \textit{just-in-time} (JIT) compiler or passed to \verb|llc| provided in LLVM toolchain to get target executable.
+\end{enumerate}
+
+\begin{center-figure}
+	\includegraphics[scale=0.8]{fig/llvm-ir-diversity.eps}
+	\caption{Possible ways to use bitcode}
+	\label{fig:LLVM_IR_diversity}
+\end{center-figure}
+
+\begin{center-table}
+	\label{t:exp-softwares}
+	\caption{List of the softwares examined in our experiments}
+	\renewcommand{\arraystretch}{1.0}
+	\begin{tabular}{| c | l | r | r | r | r |}
+		\hline
+		\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Software}}} &
+		\multicolumn{1}{c|}{\multirow{2}{*}{\textbf{Program}}} &
+		\multicolumn{1}{c|}{\multirow{2}{2em}{\textbf{Size} (line)}} &
+		\multicolumn{3}{c|}{\textbf{Base Time} (sec)} \\
+		\cline{4-6}
+		
+		&
+		&
+		&
+		\multicolumn{1}{c|}{\textbf{User}} &
+		\multicolumn{1}{c|}{\textbf{System}} &
+		\multicolumn{1}{c|}{\textbf{Total}}
+		\\
+		\hline\hline
+
+		OpenMPagrep & % Software
+		\texttt{agrep} & % Program
+		\numprint{352} & % Size
+		\numprint{18.31} & % User Time
+		\numprint{2.25} & % System Time
+		\numprint{20.56} % Total Time
+		\\
+		\hline\hline
+		
+		%HOMB & % Software
+		%\texttt{homb} & % Program
+		%\numprint{834} & % Size
+		%\numprint{19.82} & % User Time
+		%\numprint{0.13} & % System Time
+		%\numprint{19.95} % Total Time
+		%\\
+		%\hline\hline
+
+		%libsiftfast & % Software
+		%\texttt{siftfast} & % Program
+		%\numprint{2800} & % Size
+		%\numprint{2.94} & % User Time
+		%\numprint{0.051} & % System Time
+		%\numprint{2.99} % Total Time
+		%\\
+		%\hline\hline
+
+		\multirow{9}{*}{libgrid} & % Software
+		\texttt{wf1d} & % Program
+		\multirow{9}{*}{10661} & % Size
+		\numprint{1.72} & % User Time
+		\numprint{0.10} & % System Time
+		\numprint{1.82} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf1d\_l} & % Program
+		& % Size
+		\numprint{0.06} & % User Time
+		\numprint{0.002} & % System Time
+		\numprint{0.06} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf1d\_nl} & % Program
+		& % Size
+		\numprint{0.08} & % User Time
+		\numprint{0.006} & % System Time
+		\numprint{0.08} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d} & % Program
+		& % Size
+		\numprint{2.22} & % User Time
+		\numprint{0.004} & % System Time
+		\numprint{2.23} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d\_l} & % Program
+		& % Size
+		\numprint{7.67} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{7.70} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf2d\_nl} & % Program
+		& % Size
+		\numprint{0.10} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.10} % Total Time
+		\\
+		
+		& % Software
+		\texttt{wf3d} & % Program
+		& % Size
+		\numprint{30.50} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{30.53} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf3d\_l} & % Program
+		& % Size
+		\numprint{23.84} & % User Time
+		\numprint{0.01} & % System Time
+		\numprint{23.85} % Total Time
+		\\
+
+		& % Software
+		\texttt{wf3d\_nl} & % Program
+		& % Size
+		\numprint{2.48} & % User Time
+		\numprint{0.004} & % System Time
+		\numprint{2.49} % Total Time
+		\\
+		\hline\hline
+		
+		simple-ray-tracing & % Software
+		\texttt{sray\_new\_load} & % Program
+		\numprint{10460} & % Size
+		\numprint{125.33} & % User Time
+		\numprint{0.32} & % System Time
+		\numprint{125.66} % Total Time
+		\\
+		\hline\hline
+		
+		\multirow{13}{*}{OmpSCR} & % Software
+		\texttt{fft} & % Program
+		\numprint{258} & % Size
+		\numprint{0.64} & % User Time
+		\numprint{0.04} & % System Time
+		\numprint{0.68} % Total Time
+		\\
+		
+		& % Software
+		\texttt{fft6} & % Program
+		\numprint{536} & % Size
+		\numprint{0.078} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.08} % Total Time
+		\\
+		
+		& % Software
+		\texttt{testPath} & % Program
+		\numprint{1730} & % Size
+		\numprint{0.24} & % User Time
+		\numprint{0.005} & % System Time
+		\numprint{0.25} % Total Time
+		\\
+		
+		& % Software
+		\texttt{lu} & % Program
+		\numprint{169} & % Size
+		\numprint{0.15} & % User Time
+		\numprint{0.001} & % System Time
+		\numprint{0.15} % Total Time
+		\\
+		
+		& % Software
+		\texttt{md} & % Program
+		\numprint{265} & % Size
+		\numprint{0.18} & % User Time
+		\numprint{0.002} & % System Time
+		\numprint{0.18} % Total Time
+		\\
+		
+		& % Software
+		\texttt{pi} & % Program
+		\numprint{83} & % Size
+		\numprint{0.058} & % User Time
+		\numprint{0} & % System Time
+		\numprint{0.058} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsort} & % Program
+		\numprint{168} & % Size
+		\numprint{0.18} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{0.21} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp1} & % Program
+		\numprint{345} & % Size
+		\numprint{19.59} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{19.61} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp2} & % Program
+		\numprint{387} & % Size
+		\numprint{19.63} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{19.65} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp4} & % Program
+		\numprint{405} & % Size
+		\numprint{19.61} & % User Time
+		\numprint{0.04} & % System Time
+		\numprint{19.65} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp5} & % Program
+		\numprint{302} & % Size
+		\numprint{19.57} & % User Time
+		\numprint{0.02} & % System Time
+		\numprint{19.59} % Total Time
+		\\
+		
+		& % Software
+		\texttt{qsomp6} & % Program
+		\numprint{411} & % Size
+		\numprint{19.61} & % User Time
+		\numprint{0.03} & % System Time
+		\numprint{19.64} % Total Time
+		\\
+		\hline\hline
+		
+		Glucas & % Software
+		\texttt{glucas} & % Program
+		\numprint{51986} & % Size
+		\numprint{1760.43} & % User Time
+		\numprint{0.99} & % System Time
+		\numprint{1761.42} % Total Time
+		\\
+		\hline
+	\end{tabular}
+\end{center-table}
+
+
+\label{a:var-access-instrumentation}
+After \ThreadTracer{} loads the input bitcode into memory, \Rewriter{} then inserts instrumentation codes before every \verb|load| and \verb|store| instruction. These instrumentation codes trigger variable access events at runtime when the execution is about to read or write to a memory location. In general, the instrumentation is a function call with two parameters: \verb|access id| and the \textit{memory address} being accessed. \verb|Access id| is an integer used to index into an \verb|AccessInfo| object array. Each \verb|AccessInfo| object contains syntactic information (which statement in the original source contains this access instruction), type of access (read or write to variable) and volatile or non-volatile access. The syntactic information comes from the \textit{compiler debugging information} which is generated by the compiler automatically by passing extra flag in command (\ie{} \verb|-g| to GCC).
+
+It should be noted that \Rewriter{} is a \textit{multithreaded programming API -dependent processing}. That is, \Rewriter{} for OpenMP is different than the one for Pthreads. Since \Rewriter{} tries its best to only insert the instrumentation to a code region if there will be two or more threads concurrently in the system when that code region is executing. To accomplish the objective, \Rewriter{} requires to recognize the semantics of the multithreaded programming APIs it's analyzing. Multithreaded programming APIs always includes a set of APIs for spawning new thread(s) (\ie \verb|pthread_create| in Pthreads and \verb|GOMP_parallel_start| in GNU OpenMP implementation). Usually\footnote{At least for Pthreads and OpenMP}, there's a parameter given in such APIs specified the \textit{target function} to be execute by the newly created thread. \Rewriter{} comprehends this usage pattern and only inserts the instrumentation to the target function and the functions invoked by that target function directly or indirectly.
+
+\paragraph{JIT.}
+\ThreadTracer{} contains a JIT compiler bring from the LLVM upstream with some slight changes which remove several unneeded features such as \textit{lazy compilation}. The \JIT{} can compile the instrumented bitcode from \Rewriter{} into the target machine code on-the-fly. 
+
+Thread library (\eg{} \verb|libpthread| to Pthread and \verb|libgomp| to GNU implementation of the OpenMP) contains the real implementation of the multithreaded programming APIs. The instrumentation codes are inserted by hand in the appropriate location in advance. The instrumentation codes are for the purpose of triggering the events other than memory access and miscellaneous event (these two are triggered by the instrumentation inserted by \Rewriter{}). \JIT{} enforces the linking of thread library to the instrumented one.
+
+\paragraph{Tracer.}
+A \Tracer{} implements a dynamic analysis tool. It defines what action to take when an event is triggered. At runtime, the generated events are first routed to \verb|TTManager|. \verb|TTManager| contains \textit{a chain of} \Tracer{}s setup before program execution. \verb|TTManager| will \textit{dispatch} the coming event to the corresponding event handler in \Tracer{} following the chain.
+
+The following sections are organized as follows. In \refsec{s:ThreadTracer-APIs}, we describe the APIs exported by \ThreadTracer{} and provide an example demonstrating how to implement \Eraser{}'s \Lockset{} algorithm on the top of \ThreadTracer{}. Optimizations and features implemented in \ThreadTracer{} are described in \refsec{s:ThreadTracer-Optimizations} and we compare \ThreadTracer{} with the previous work \RoadRunner{} in the \hyperref[s:ThreadTracer-Comparison]{last section}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{\ThreadTracer{} APIs}
+\label{s:ThreadTracer-APIs}
+
+
+The \verb|Tracer| class contains abstract interfaces to each kind of event. Analysis tool such as \Eraser{} \textit{inherits} this class and provides the handler implementation to process the desired events. Each handler is invoked alone with an \textit{event object} which contains related information about the event. For example, \verb|AccessInfo| in \verb|VarAccessEvent| contains source location of the access, type of the access (read or write, volatile or non-volatile), \etc{}.
+
+\verb|TThread| and \verb|TTVar| appearing above are described as follows.
+
+\begin{lstlisting}[caption={\texttt{TThread}, \texttt{TTVar}, \texttt{TTLock} and \texttt{TTBarrier} class}]
+template<typename TTClass>
+class TTObject {
+	static map<RealObjTy, TTClass *> RealObjectToTTObjectMap;
+	
+	RealObjTy Ref;
+	unsigned TTID;
+};
+
+class TThread : public TTObject<TThread> {
+	const TTManager *TTM;
+	const TThread *Parent;
+	
+	VarAccessEvent VarAccessEventObject;
+	
+	void triggerVarAccessEvent(RealObjTy VarMemAddr, int AccessID) {
+		// prepare VarAccessEventObject object
+		TTM->onVarAccess(&VarAccessEventObject);
+	}
+};
+
+class TTVar  : public TTObject<TTVar>  { }
+class TTLock : public TTObject<TTLock> { }
+
+class TTBarrier : public TTObject<TTBarrier> { 
+	// Threads currently suspended in this barrier.
+	list<const TThread *> SuspendThreads;
+}
+\end{lstlisting}
+
+In \ThreadTracer{}, each thread, variable, lock and barrier object created during the execution has corresponding \textit{shadow object} called \verb|TThread|, \verb|TTVar|, \verb|TTLock| and \verb|TTBarrier|, respectively. For instance, \ThreadTracer{} associates a \verb|TThread| object with each \textit{thread} executing a task in OpenMP. There's a map between shadow object and real thread object. Besides, every shadow object is uniquely identified by an integer \verb|TTID| within the same class. We'll show how \verb|TTID| can be useful later.
+
+\begin{lstlisting}[caption={\texttt{TTManager} class}]
+class TTManager : public Tracer {
+	// Chain of the tracers
+	list<Tracer *> TracerChain;
+	
+	void onVarAccess(const VarAccessEvent *E) {
+		foreach Tracer T in TracerChain:
+			T->onVarAccess(E); // bubbling the event through the chain
+	}
+};
+\end{lstlisting}
+
+\verb|TTManager| is a special class inheriting from \verb|Tracer|. It contains a chain of \Tracer{} and the implementation to all event handlers in \verb|TTManager| is simply to delegate the event to the \Tracer{}s one by one following the chain. An instance of \verb|TTManager| is created before the execution entering the \verb|main()| and shared between all \verb|TThread| objects. When an event in thread $T$ is about to trigger, it first finds the corresponding \verb|TThread| object $T'$ of $T$ and prepares the event object within $T'$. The event object for each kind of event is allocated once in each \verb|TThread| object and is reused for all event of that kind generated by that thread. After the preparation gets done, $T'$ sends the event by calling the corresponding event handler of \verb|TTManager| object.
+
+\begin{lstlisting}[caption={\texttt{TTDataStore}, \texttt{ThreadDataStore} and \texttt{VarDataStore} class}]
+// TTClass should be a TTObject derivation.
+template<typename TTClass, typename DataClass>
+class TTDataStore {
+	DataClass* Data[];(*@\label{l:TTDataStore-Data}@*)
+	
+	inline DataClass *get(const TTClass *T) {
+		return Data[T->TTID];
+	}
+	
+ 	inline void set(const TTClass *T, DataClass *D) {
+		Data[T->TTID] = D;
+	}
+};
+
+template<typename DataClass>
+class ThreadDataStore : public TTDataStore<TThread, DataClass> { };
+
+template<typename DataClass>
+class VarDataStore : public TTDataStore<TTVar, DataClass> { };
+\end{lstlisting}
+
+It's common to see that \Tracer{} needs to maintain some states for every thread, variable, lock or barrier currently in the system. \ThreadTracer{} provides an easy way to do so powered by \textit{template metaprogramming} technique in C++. One can simply declares a \verb|ThreadDataStore| object like \lstinline[basicstyle=\ttfamily\normalsize]|ThreadDataStore<FooStateClass> BarStateStore| in the \Tracer{} and every active thread now keeps a state object of the type \verb|FooStateClass|. Given a thread $T$ and its shadow thread $T'$ (\ie{} corresponding \verb|TThread| object), \lstinline[basicstyle=\ttfamily\normalsize,mathescape]|FooStateClass.get($T'$)| can retrieve the state object maintained for thread $T$. The retrieval is $O(1)$ time since it uses \verb|TTID| in every \verb|TTObject| to index into the data array in \reflstline{l:TTDataStore-Data}.
+
+Another thing to note here is that, \lstinline[basicstyle=\ttfamily\normalsize]|TTDataStore.get()| and \lstinline[basicstyle=\ttfamily\normalsize]|TTDataStore.set()| are automatically  \lstinline[basicstyle=\ttfamily\normalsize]|TTDataStore.get()| into the function context of the caller.
+
+\begin{lstlisting}[caption={\texttt{EraserTracer} class},label={l:EraserTracer}]
+typedef set<const TTLock *> Lockset; // use C++ STL set
+ 
+};
+\end{lstlisting}
+
+\reflst{l:EraserTracer} shows an example which implements a basic \Eraser{} \Lockset{} algorithm on the top of \ThreadTracer{}. \Eraser{} maintains two things during the analysis. Each thread keeps a \textit{set of locks} recording the locks currently held and each variable keeps a set of locks recording the locks consistently held when access. It's very easy to do this in \ThreadTracer{} as you can see in \reflstline{l:EraserTracer-ThreadData} and \reflstline{l:EraserTracer-VarData}, respectively.
+
+Only three event handlers need to be implemented to complete the basic \Lockset{} \Tracer{}:
+\begin{itemize}
+	\item \verb|onLockAcquire| --- \xmakefirstuc{\reflstline{l:EraserTracer-Retrieve-Locks-Held}} retrieves the set of locks currently held by the thread triggering this event and \reflstline{l:EraserTracer-Add-Lock} adds the acquired lock to the set.
+	\item \verb|onLockRelease| --- Remove the lock from the lock set held by the thread.
+	\item \verb|onVarAccess| --- \xmakefirstuc{\reflstline{l:EraserTracer-Intersect-Lock-Set}} updates the lock set associated with the accessing variable by intersecting it with the set of locks held the thread that accesses the variable. If the lock set of that variable becomes empty set after the intersection, which means that variable is not protected by at least one fixed lock when access. According to \Eraser{}, possible data race may happen on that variable.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Optimizations and Features}
+\label{s:ThreadTracer-Optimizations}
+
+\subsection{Composition of \Tracer{}s}
+Composition of the tracer can be achieved via the command line:
+\begin{center}
+	\verb|tt -rewriter=... -tracers=FastTrack,Eraser| \textless\textit{target program}\textgreater
+\end{center}
+This will tell \verb|TTManager| object to setup the \Tracer{} chain with two \Tracer{}s where \FastTrack{} is the first and \Eraser{} goes second. All events triggered at runtime will first goes \FastTrack{} \Tracer{} and then \Eraser{}. \ThreadTracer{} makes it easy to see the combination effect of the dynamic analysis algorithm and also facilitates implementing new analysis tool based on the composition of the previous work.
+
+\subsection{Replay}
+\ThreadTracer{} also supports \textit{serialization} of the shadow objects and events to the on-disk files just like a \textit{log}. After the execution, one can use \ThreadTracer{} to \textit{replay} the log and performs any offline analysis. This is also known as the \textit{post-mortem}~\cite{Helmbold:1994p1182}. Post-mortem approaches can speed up the program execution and facilitate debugging analysis tools since the thread-interleaving is now fixed as in the log.
+
+\subsection{Sampling}
+\ThreadTracer{} supports \textit{framework-level sampling}. The sampling techniques currently implemented in \ThreadTracer{} comes from \LiteRace{}~\cite{Marino:2009p846}. When the sampling is enable by the user from the command line, \Rewriter{} generates a \textit{sampler function} and \textit{two copies of function} for each function $F$ containing the instrumentation codes as shown in \reffig{fig:ThreadTracer_sampling}. One copy is the original function containing no any instrumentation for variable accesses and another one enables all instrumentation. \Rewriter{} also replaces all call sites of $F$ with the sampler function. At runtime, the sampler function will call the instrumented copy according to the \textit{sampling rate}.
+
+\begin{center-figure}
+	\includegraphics[scale=0.9]{fig/sampling.eps}
+	\caption{Sampling instrumentation uses in \ThreadTracer{}}
+	\label{fig:ThreadTracer_sampling}
+\end{center-figure}
+
+\subsection{Real-to-Shadow Variable Map Lookup Cache}
+\label{ss:real-to-shadow-lookup}
+When there's a memory access happening, the instrumentation sends the memory location being accessed (real variable) alone with an \verb|access id| back to \ThreadTracer{} as mentioned \hyperref[a:var-access-instrumentation]{above}. \ThreadTracer{} then looks up the map to find the corresponding \verb|TTVar| object (shadow variable) for that memory location. Memory access events are triggered frequently even the target may not be a large program. Therefore, fast lookup for this real-to-shadow operation is desired. To reduce the demand for looking up the whole real-to-shadow variable map (which requires $O(\log n)$ by using C++ STL \verb|map|), we implement two-level cache. The first level is a \textit{thread-local} cache maintained in every \verb|TThread| object. It contains 8 (real/shadow variable) distinct pairs which are most recently accessed by that thread.
+
+The second-level is a \textit{thread-shared} cache. It is constructed from the observation that \textit{the memory location accessed at runtime usually remains unchanged for each syntactic access}. This can be implemented by using \verb|access id| to index into an array storing (real/shadow variable) pairs.
+
+The lookup procedure for memory location being accessed $\mathcal{M}$ with \verb|access id| $\mathcal{A}$ becomes three steps:
+\begin{enumerate}
+	\item ($O(1)$ time) Search the 8-entry thread-local cache linearly and stop once found.
+	\item ($O(1)$ time) Use $\mathcal{A}$ as an array index to retrieve the entry in thread-shared cache. Compare the memory address recoding in the entry with $\mathcal{M}$. If they are the same, stop the lookup and insert a new pair to thread-local cache by discarding the least recently used one.
+	\item \label{lbl:real-to-shadow-lookup-step3}($O(\log n)$ time) Find the associated \verb|TTVar| object in the map which contains all pairs real/shadow variables with the $\mathcal{M}$ as the key. Update entry indexed by $\mathcal{A}$ in thread-shared and thread-local cache.
+\end{enumerate}
+
+This two-level cache design is straightforward to implementation and is able to capture large portion of the real-to-shadow variable lookup (hit rate spans from 60\% to 99.9\%, generally higher than 90\%) avoiding to use expensive operations in \hyperref[lbl:real-to-shadow-lookup-step3]{step 3}.
+
+\subsection{Array Element Access}
+Array element access\VerbatimFootnotes{\footnote{\ThreadTracer{} regards the \textit{object member (or field)} access as the same as the array element access. The address of the memory being accessed are both in the form of \verb|address of base object| $+$ \verb|offset|.}} is treated specially in \ThreadTracer{}. The instrumentation for an array element access passes the address of the \textit{nearest base object}\footnote{For an array $A$, We say $A[0]$ is the \textit{base object} of $A$. For access like $a.b[2].c.d[5]$, the nearest base object is $a.b[2].c.d$ and for $x.y[2].z$ is $x.y[2]$.} with an \textit{offset} instead of the address of that element. The shadow object of the base object allocates an array of shadow objects, with size equal to the number of elements in the real array, to hold all shadow objects of its elements as in the real array. This benefits the lookup of \textit{real-to-shadow variable cache} since now memory location for all array element reference to a fixed location, the address of the base object. After the lookup, the \verb|TTVar| object of the base object returns the child \verb|TTVar| object at given offset.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Compare \RoadRunner{} and \ThreadTracer{}}
+\label{s:ThreadTracer-Comparison}
+\ThreadTracer{} shares some basic ideas with \RoadRunner{}~\cite{Flanagan:2010p71} such as event-based instrumentation, shadow object and event log replay. However, underlying design of \ThreadTracer{} is quite different from \RoadRunner{}. This is because \RoadRunner{} only supports Java threads while \ThreadTracer{} is intended to support variety of multithreaded programming APIs such as Pthreads and OpenMP. Therefore, an additional API-dependent interfaces such as \Rewriter{} are required. New features such as sampling have been added. \ThreadTracer{} has following improvements compared to \RoadRunner{}:
+
+\paragraph{Serialization of \Tracer{} Internal State.} For the large programs especially those containing hundreds of thousands memory locations, maintaining state objects for all memory locations in each activated \Tracer{} often makes the program becomes too large to fit in memory. In \ThreadTracer{}, there's a set of APIs for serialization of state object. The state objects using in every \Tracer{} are able to be \textit{serialized} to the on-disk file (or database) and \textit{unserialized} from the disk by inheriting the \verb|Serializer| class and providing the implementations to \verb|serialize()| and \verb|unserialize()| functions. This makes \ThreadTracer{} \textit{scalable}.
+
+\paragraph{Effectiveness of the real-to-shadow Variable Cache.} There's also an additional two-level cache design for real-to-shadow variable lookup like \ThreadTracer{} in \RoadRunner{}. The first level is an eight entries thread-local cache which is as the same as in \ThreadTracer{}. The second level in \RoadRunner{} is a thread-shared cache containing the most recently accesses across all threads (at most 128 pairs of real/shadow variables recorded in real implementation). In other words, the second level cache in \RoadRunner{} is just a \textit{mini version} of global real-to-shadow map. Therefore, time complexity requires for second level cache lookup equals to the global map lookup in \RoadRunner{} which is usually $O(\log n)$ compared to $O(1)$ in \ThreadTracer{}.
